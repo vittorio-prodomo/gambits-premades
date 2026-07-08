@@ -1,3 +1,22 @@
+// GPS fork (Vittorio): fallback unarmed strike for creatures with no valid weapon/spell for an OA.
+// Reuses an existing "Unarmed Strike" (PCs have one; or one this fork created earlier); otherwise
+// clones dnd5e's canonical Unarmed Strike (1 + STR bludgeoning), equipped, flagged autoUnarmedStrike.
+async function gpsGetFallbackUnarmedStrike(actor) {
+    if (!actor) return null;
+    let existing = actor.items.find(i => i.type === "weapon" && /^unarmed strike$/i.test(i.name)
+        && Array.from(i.system.activities ?? []).some(a => a.actionType === "mwak"));
+    if (existing) return existing;
+    const src = await fromUuid("Compendium.dnd5e.items.GsuvwoekKZatfKwF");
+    if (!src) return null;
+    const data = src.toObject();
+    delete data._id;
+    foundry.utils.setProperty(data, "system.equipped", true);
+    foundry.utils.setProperty(data, "system.proficient", 1);
+    foundry.utils.setProperty(data, "flags.gambits-premades.autoUnarmedStrike", true);
+    const created = await actor.createEmbeddedDocuments("Item", [data]);
+    return created?.[0] ?? null;
+}
+
 export async function opportunityAttackScenarios({tokenUuid, regionUuid, regionScenario, isTeleport, waypoints, userId}) {
     let gmUser = game.gps.getPrimaryGM();
     let debugEnabled = MidiQOL.safeGetGameSetting('gambits-premades', 'debugEnabled');
@@ -36,7 +55,7 @@ export async function opportunityAttackScenarios({tokenUuid, regionUuid, regionS
         let validWeapons = effectOriginActor.items.filter(item => {
             const acts = item.system?.activities ?? [];
         
-            const qualifiesWeaponOrFeat = (acts.some(a => a.actionType === "mwak") && item.system?.equipped === true) || (item.system?.type?.value === "monster" && item.type === "feat" && acts.some(a => a.actionType === "mwak" || a.actionType === "msak"));
+            const qualifiesWeaponOrFeat = (acts.some(a => a.actionType === "mwak" || a.actionType === "msak")) || (item.system?.type?.value === "monster" && item.type === "feat" && acts.some(a => a.actionType === "mwak" || a.actionType === "msak"));
         
             return qualifiesWeaponOrFeat;
         });
@@ -210,7 +229,12 @@ export async function opportunityAttackScenarios({tokenUuid, regionUuid, regionS
     
     let processedValidOptions = await processValidOptions({actor: effectOriginActor});
     const {hasWarCaster, favoriteWeaponUuid, validWeapons} = processedValidOptions;
-    if (!validWeapons.length) return await resumeMovement();
+    if (!validWeapons.length) {
+        // GPS fork (Vittorio): offer an unarmed strike when the creature has no weapon/spell in hand.
+        const gpsUnarmed = await gpsGetFallbackUnarmedStrike(effectOriginActor);
+        if (!gpsUnarmed) return await resumeMovement();
+        validWeapons.push(gpsUnarmed);
+    }
     
     let dialogContent = `
         <div class="gps-dialog-container">
@@ -619,7 +643,7 @@ async function processValidOptions({actor}) {
     let validWeapons = actor.items.filter(item => {
         const acts = item.system?.activities ?? [];
       
-        const qualifiesWeaponOrFeat = (acts.some(a => a.actionType === "mwak") && item.system?.equipped === true) || (item.system?.type?.value === "monster" && item.type === "feat" && acts.some(a => a.actionType === "mwak" || a.actionType === "msak"));
+        const qualifiesWeaponOrFeat = (acts.some(a => a.actionType === "mwak" || a.actionType === "msak")) || (item.system?.type?.value === "monster" && item.type === "feat" && acts.some(a => a.actionType === "mwak" || a.actionType === "msak"));
 
         let warCasterSpell;
         if(hasWarCaster) {
@@ -678,7 +702,7 @@ async function processValidRange({actor, token}) {
     let overrideItems = ["Booming Blade"];
 
     let validWeapons = actor.items.filter(item =>
-        (item.type === "weapon" && item.system.equipped === true && item.system.activities?.some(a => a.actionType === "msak" || a.actionType === "mwak")) || ((item.system?.type?.value === "monster" && item.type === "feat") && item.system.activities?.some(a => a.actionType === "mwak" || a.actionType === "msak"))
+        (item.type === "weapon" && item.system.activities?.some(a => a.actionType === "msak" || a.actionType === "mwak")) || ((item.system?.type?.value === "monster" && item.type === "feat") && item.system.activities?.some(a => a.actionType === "mwak" || a.actionType === "msak"))
     );
 
     let validSpells = actor.items.filter(item =>
@@ -688,16 +712,17 @@ async function processValidRange({actor, token}) {
     isMetric ||= validSpells.some(item => ((item.system?.range?.units ?? "").toLowerCase() === "m") || (item.system?.activities ?? []).some(a => ((a.range?.units ?? "").toLowerCase() === "m")));
 
     let oaDisabled;
+    let unarmedFallback = false;
     if (!validWeapons.length && !validSpells.length) {
-        ui.notifications.warn(game.i18n.format("GAMBITSPREMADES.Notifications.GenericFeatures.OpportunityAttack.NoValidOptions", { name: actor.name }));
-        oaDisabled = true;
+        // GPS fork (Vittorio): no weapon/spell in hand -> fall back to an unarmed strike (RAW: any creature can make an OA unarmed) instead of cancelling the OA.
+        unarmedFallback = true;
     }
 
     let onlyThrownWeapons = validWeapons.length > 0 && validWeapons.every(item => item.system.properties.has('thr'));
 
     let maxRange;
     let mwakRange = actor.flags["midi-qol"]?.range?.mwak;
-    if (onlyThrownWeapons || validSpells.length > 0) {
+    if (onlyThrownWeapons || validSpells.length > 0 || unarmedFallback) {
         maxRange = isMetric ? game.gps.convertFromFeet({ range: 5 }) : 5;
     } else {
         const result = validWeapons.reduce((acc, item) => {
