@@ -87,8 +87,17 @@ export async function opportunityAttackScenarios({tokenUuid, regionUuid, regionS
 
     let currentCombatant = canvas.tokens.get(game.combat?.current.tokenId);
     if(currentCombatant?.id !== token.object.id) {
-        if(debugEnabled) game.gps.logInfo(`Opportunity Attack for ${effectOriginActor.name} failed due to not tokens turn in combat`);
-        return; // Avoid initiating opportunity attack when it's not a token's turn
+        // A Primal Companion beast has no turn of its own — it moves on its HUNTER's turn — so treat the
+        // hunter's turn as the beast's for this "it's your turn" gate; otherwise the beast never provokes an
+        // opportunity attack when it moves. Detected structurally: a chris-premades summon carrying a Primal
+        // Companion Dodge item, whose controller is the current combatant.
+        let summonControlUuid = token.actor?.flags?.["chris-premades"]?.summons?.control?.actor;
+        let isPrimalCompanionBeast = !!summonControlUuid && token.actor.items.some(i => i.flags?.["chris-premades"]?.info?.identifier === "primalCompanionDodge");
+        let beastMovingOnHuntersTurn = isPrimalCompanionBeast && currentCombatant?.actor?.uuid === summonControlUuid;
+        if(!beastMovingOnHuntersTurn) {
+            if(debugEnabled) game.gps.logInfo(`Opportunity Attack for ${effectOriginActor.name} failed due to not tokens turn in combat`);
+            return; // Avoid initiating opportunity attack when it's not a token's turn
+        }
     }
     
     let hasSentinel = effectOriginActor?.items?.find(i => i.flags["gambits-premades"]?.gpsUuid === "f7c0b8c6-a36a-4f29-8adc-38ada0ac186c");
