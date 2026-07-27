@@ -211,6 +211,18 @@ export async function opportunityAttackScenarios({tokenUuid, regionUuid, regionS
         return;
     }
 
+    //FORK PATCH — Check if token was moved by an ally's Maneuvering Attack (2024 Battle Master).
+    //RAW: the chosen ally may move "without provoking Opportunity Attacks from the target of your
+    //attack" — so the exemption is per-pair, exactly like the two above. Set by chris-premades'
+    //modern maneuversManeuveringAttack as an ActiveEffect change, so it clears with the effect.
+    //`.includes` is deliberately tolerant of both an array of ids and a single id string, because an
+    //AE change writes a string where GPS's own imperative setFlag writes an array.
+    let isManeuveringAttack = token.actor.getFlag("midi-qol", "oaManeuveringAttack");
+    if (isManeuveringAttack && isManeuveringAttack.includes(effectOriginToken.id)) {
+        if(debugEnabled) game.gps.logInfo(`Opportunity Attack for ${effectOriginActor.name} failed because token was repositioned by Maneuvering Attack`);
+        return;
+    }
+
     //Check if origin token is Charmed by initiating token
     let isCharmed = effectOriginActor.appliedEffects.find(e => e.name.toLowerCase() === "charmed");
     if(isCharmed) {
