@@ -17,6 +17,38 @@ async function gpsGetFallbackUnarmedStrike(actor) {
     return created?.[0] ?? null;
 }
 
+// GPS fork (Vittorio, T68): is `attackerToken` grappled BY `moverToken` right now?
+// Two independent sources, so the failsafe survives either one being absent:
+//  1. chris-premades' grapple state — the grappled creature carries an effect with identifier
+//     'grappled' whose flags['chris-premades'].grapple.tokenId is the GRAPPLER's token id
+//     (chris-premades/scripts/lib/utilities/tokenUtils.js grappleHelper). This is the live pair,
+//     so it needs no set/clear wiring of our own and cannot go stale.
+//  2. flags['midi-qol'].oaGrappleAttack on the MOVER, listing grappled token ids — the sibling of
+//     oaMobileFeatAttack / oaFancyFootworkAttack / oaManeuveringAttack above, so any non-CPR grapple
+//     source can opt in without touching this file again. Tolerates an array or a single id string,
+//     because an ActiveEffect change writes a string where an imperative setFlag writes an array.
+// Never throws: any unexpected shape falls through to "not grappled", i.e. the OA proceeds as it
+// does today. A failsafe that suppressed attacks on bad data would be worse than the bug.
+function gpsIsGrappledBy(attackerToken, moverToken) {
+    try {
+        const attackerActor = attackerToken?.actor;
+        const moverId = moverToken?.id;
+        if (!attackerActor || !moverId) return false;
+
+        const effects = [...(attackerActor.appliedEffects ?? []), ...(attackerActor.effects ?? [])];
+        const grappledByMover = effects.some(e =>
+            e?.flags?.["chris-premades"]?.info?.identifier === "grappled"
+            && e?.flags?.["chris-premades"]?.grapple?.tokenId === moverId);
+        if (grappledByMover) return true;
+
+        const flagged = moverToken.actor?.getFlag("midi-qol", "oaGrappleAttack");
+        return !!flagged && flagged.includes(attackerToken.id);
+    } catch (err) {
+        console.warn("gambits-premades | T68 grapple OA check failed, allowing the OA", err);
+        return false;
+    }
+}
+
 export async function opportunityAttackScenarios({tokenUuid, regionUuid, regionScenario, isTeleport, waypoints, userId}) {
     let gmUser = game.gps.getPrimaryGM();
     let debugEnabled = MidiQOL.safeGetGameSetting('gambits-premades', 'debugEnabled');
@@ -220,6 +252,20 @@ export async function opportunityAttackScenarios({tokenUuid, regionUuid, regionS
     let isManeuveringAttack = token.actor.getFlag("midi-qol", "oaManeuveringAttack");
     if (isManeuveringAttack && isManeuveringAttack.includes(effectOriginToken.id)) {
         if(debugEnabled) game.gps.logInfo(`Opportunity Attack for ${effectOriginActor.name} failed because token was repositioned by Maneuvering Attack`);
+        return;
+    }
+
+    //FORK PATCH (T68) — Check if the would-be attacker is currently GRAPPLED BY the moving token.
+    //RAW (2024 Grappled): the grappler "can drag or carry you when it moves", so a grappled creature
+    //is never actually left behind by its own grappler and can never legitimately provoke from it.
+    //Foundry does not model the drag, so the grappled token stays put and provokes — this is the
+    //belt-and-braces failsafe that does not depend on the drag working. Scope is deliberately narrow:
+    //FROM the grappled creature, TOWARD its grappler only, and only while the grapple is live.
+    //Derived from live effect state rather than a flag set at grapple time, which is what makes the
+    //release-then-walk-away case correct for free: dropping the grapple removes the effect, so the
+    //suppression is gone by the time the movement is evaluated and the OA is provoked normally.
+    if (gpsIsGrappledBy(effectOriginToken, token)) {
+        if(debugEnabled) game.gps.logInfo(`Opportunity Attack for ${effectOriginActor.name} failed because it is grappled by the moving token`);
         return;
     }
 
