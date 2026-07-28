@@ -10,6 +10,7 @@ export async function riposte({workflowData,workflowType,workflowCombat}) {
         return;
     }
     let target = workflow.targets.first();
+    if(!target) return;
     let gmUser = game.gps.getPrimaryGM();
     const initialTimeLeft = Number(MidiQOL.safeGetGameSetting('gambits-premades', `Riposte Timeout`));
     let debugEnabled = MidiQOL.safeGetGameSetting('gambits-premades', 'debugEnabled');
