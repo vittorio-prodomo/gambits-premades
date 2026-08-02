@@ -599,6 +599,218 @@ export function findValidToken({initiatingTokenUuid, targetedTokenUuid, itemName
     return true;
 }
 
+/**
+ * The GPS countdown chrome — the shrinking, recolouring title-bar bar, the live `- Ns` title suffix
+ * and the optional pause button — lifted verbatim out of `process3rdPartyReactionDialog`'s render
+ * block so anything can wear it, not just a 3rd-party reaction dialog (T106, 2026-08-02).
+ *
+ * ⚠️ Chrome only: it dresses the window frame and touches nothing inside the content. The reaction
+ * dialog's own listeners (item select, weapon image, enemy tokens) stay with the caller.
+ *
+ * ⚠️ The pause icon and button are looked up BY ID and are optional — a caller whose content has no
+ * pause button just gets a countdown that cannot be paused, which is why every use of them below is
+ * null-guarded. Likewise `type`/`source`: omit them and `getDialogColors` falls to its default
+ * warm-orange → red ramp, which is the right look for a player-facing prompt.
+ *
+ * ⚠️ Installs `getTimeLeft` / `setTimeLeft` / `setPaused` / `updateUI` onto the dialog, and expires
+ * it by calling `dialog.close()` — so a caller must treat a closed dialog as a declined one.
+ *
+ * @param {object} dialog                 the ApplicationV2 dialog instance (`event.target` in render)
+ * @param {object} p
+ * @param {string} [p.dialogId]           suffix of `#pauseIcon_<id>` / `#pauseButton_<id>`, if present
+ * @param {string} p.dialogTitle          base title; the countdown is appended to it
+ * @param {number} p.initialTimeLeft      seconds
+ * @param {string} [p.type]               passed through to `getDialogColors`
+ * @param {string} [p.source]             passed through to `getDialogColors`
+ */
+export function attachCountdownChrome(dialog, { dialogId, dialogTitle, initialTimeLeft, type, source } = {}) {
+        dialog.isPaused = false;
+        dialog._closing = false;
+
+        const root = dialog.element;
+        const titleEl = root?.querySelector(".window-title");
+        const headerEl = root?.querySelector(".window-header");
+        const pauseIcon = root?.querySelector(`#pauseIcon_${dialogId}`);
+        const pauseBtn = root?.querySelector(`#pauseButton_${dialogId}`);
+
+        const useFullTitleBar = !!game.settings.get("gambits-premades", "enableTimerFullAnim");
+
+        root?.classList.toggle("gps-timer-full", useFullTitleBar);
+        root?.classList.toggle("gps-timer-thin", !useFullTitleBar);
+
+        root?.classList.add("gps-dialog-timer");
+        if (pauseBtn) pauseBtn.classList.add("gps-pause-btn");
+
+        let barEl = headerEl?.querySelector(":scope > .gps-titlebar-progress");
+        if (!barEl && headerEl) {
+            barEl = document.createElement("div");
+            barEl.className = "gps-titlebar-progress";
+            headerEl.prepend(barEl);
+        }
+        if (barEl) {
+            barEl.classList.toggle("gps-titlebar-progress--thin", !useFullTitleBar);
+        }
+
+        const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
+        const initial = Math.max(Number(initialTimeLeft) || 0, 0);
+        const durationMs = initial * 1000;
+
+        if (dialog._uiTicker) clearInterval(dialog._uiTicker);
+        if (dialog._rafId) cancelAnimationFrame(dialog._rafId);
+        if (dialog._barAnim) {
+        try {
+            dialog._barAnim.cancel();
+        } catch (_) {}
+        }
+
+        const canWAAPI = !!barEl && typeof barEl.animate === "function" && durationMs > 0;
+
+        dialog.timeLeft = initial;
+
+        if (canWAAPI) {
+        dialog._barAnim = barEl.animate(
+            [{ transform: "scaleX(1)" }, { transform: "scaleX(0)" }],
+            { duration: durationMs, easing: "linear", fill: "both" }
+        );
+
+        dialog.getTimeLeft = () => {
+            const ct = Number(dialog._barAnim?.currentTime ?? 0);
+            return clamp((durationMs - ct) / 1000, 0, initial);
+        };
+
+        dialog.setTimeLeft = (secs) => {
+            if (!dialog._barAnim) return;
+            const s = clamp(Number(secs) || 0, 0, initial);
+            const ct = durationMs - s * 1000;
+            dialog._barAnim.currentTime = clamp(ct, 0, durationMs);
+        };
+
+        dialog.setPaused = (paused) => {
+            dialog.isPaused = !!paused;
+            if (!dialog._barAnim) return;
+            if (dialog.isPaused) dialog._barAnim.pause();
+            else dialog._barAnim.play();
+        };
+        } else {
+        dialog._endTime = performance.now() + durationMs;
+
+        dialog.getTimeLeft = () => {
+            if (dialog.isPaused) return dialog.timeLeft;
+            const t = Math.max((dialog._endTime - performance.now()) / 1000, 0);
+            return clamp(t, 0, initial);
+        };
+
+        dialog.setTimeLeft = (secs) => {
+            const s = clamp(Number(secs) || 0, 0, initial);
+            dialog.timeLeft = s;
+            if (!dialog.isPaused) dialog._endTime = performance.now() + s * 1000;
+        };
+
+        dialog.setPaused = (paused) => {
+            const next = !!paused;
+            if (next === dialog.isPaused) return;
+            if (next) {
+            dialog.timeLeft = dialog.getTimeLeft();
+            dialog.isPaused = true;
+            } else {
+            dialog.isPaused = false;
+            dialog._endTime = performance.now() + dialog.timeLeft * 1000;
+            }
+        };
+
+        const tick = () => {
+            if (dialog._closing) return;
+
+            const timeLeft = dialog.getTimeLeft();
+            dialog.timeLeft = timeLeft;
+
+            if (barEl && initial > 0) {
+            const ratio = clamp(timeLeft / initial, 0, 1);
+            barEl.style.transform = `scaleX(${ratio})`;
+            }
+
+            if (timeLeft <= 0) dialog.close();
+            else dialog._rafId = requestAnimationFrame(tick);
+        };
+
+        dialog._rafId = requestAnimationFrame(tick);
+        }
+
+        let lastSecondShown = -1;
+        let lastColorTick = 0;
+        let lastPaused = dialog.isPaused;
+
+        dialog.updateUI = (force = false) => {
+        const timeLeft = dialog.getTimeLeft?.() ?? dialog.timeLeft ?? 0;
+        dialog.timeLeft = timeLeft;
+
+        const secs = Math.ceil(timeLeft);
+        if ((force || secs !== lastSecondShown) && titleEl) {
+            titleEl.textContent = `${dialogTitle} - ${secs}s`;
+            lastSecondShown = secs;
+        }
+
+        if (pauseIcon && (force || dialog.isPaused !== lastPaused)) {
+            pauseIcon.classList.toggle("fa-play", dialog.isPaused);
+            pauseIcon.classList.toggle("fa-pause", !dialog.isPaused);
+            lastPaused = dialog.isPaused;
+        }
+
+        const now = performance.now();
+        if (force || now - lastColorTick > 250) {
+            const dialogColors = getDialogColors({ type, source, timeLeft, initialTimeLeft: initial });
+
+            if (root) {
+            root.style.setProperty("--gps-timer-color", dialogColors.borderColorStop);
+            root.style.setProperty("--gps-select-color", dialogColors.selectColor);
+            root.style.setProperty("--gps-option-color", dialogColors.optionColor);
+            root.style.setProperty("--gps-pause-color", dialogColors.pauseColor);
+            }
+
+            lastColorTick = now;
+        }
+
+        if (pauseBtn) pauseBtn.classList.toggle("paused", dialog.isPaused);
+        };
+
+        dialog._uiTicker = setInterval(() => {
+        if (dialog._closing) return;
+        dialog.updateUI(false);
+        }, 200);
+
+        if (canWAAPI && dialog._barAnim) {
+        dialog._barAnim.finished
+            .then(() => {
+            if (!dialog._closing) dialog.close();
+            })
+            .catch(() => {
+            /* cancelled */
+            });
+        }
+
+        dialog.updateUI(true);
+}
+
+/**
+ * Stop the countdown and release its timers. Idempotent, and safe on a dialog that never wore the
+ * chrome. ⚠️ Call this from EVERY exit — a button callback, the close handler, an early return —
+ * or the rAF/interval pair outlives the dialog.
+ */
+export function detachCountdownChrome(dialog) {
+    if (!dialog) return;
+    dialog._closing = true;
+
+    if (dialog._uiTicker) clearInterval(dialog._uiTicker);
+    if (dialog._rafId) cancelAnimationFrame(dialog._rafId);
+    if (dialog._barAnim) {
+        try {
+            dialog._barAnim.cancel();
+        } catch (_) {}
+    }
+
+    dialog.timeLeft = 0;
+}
+
 export async function process3rdPartyReactionDialog({
   dialogTitle,
   dialogContent,
@@ -792,17 +1004,8 @@ export async function process3rdPartyReactionDialog({
         icon: "fas fa-check",
         classes: ["default"],
         callback: async (event, button, dialog) => {
-          dialog._closing = true;
+          detachCountdownChrome(dialog);
 
-          if (dialog._uiTicker) clearInterval(dialog._uiTicker);
-          if (dialog._rafId) cancelAnimationFrame(dialog._rafId);
-          if (dialog._barAnim) {
-            try {
-              dialog._barAnim.cancel();
-            } catch (_) {}
-          }
-
-          dialog.timeLeft = 0;
           dialogState.interacted = true;
           dialogState.decision = "yes";
 
@@ -863,17 +1066,8 @@ export async function process3rdPartyReactionDialog({
         classes: ["default"],
         default: true,
         callback: async (event, button, dialog) => {
-          dialog._closing = true;
+          detachCountdownChrome(dialog);
 
-          if (dialog._uiTicker) clearInterval(dialog._uiTicker);
-          if (dialog._rafId) cancelAnimationFrame(dialog._rafId);
-          if (dialog._barAnim) {
-            try {
-              dialog._barAnim.cancel();
-            } catch (_) {}
-          }
-
-          dialog.timeLeft = 0;
           dialogState.interacted = true;
           dialogState.decision = "no";
 
@@ -892,187 +1086,14 @@ export async function process3rdPartyReactionDialog({
         const dialog = event.target;
 
         dialog.dialogState = dialogState;
-        dialog.isPaused = false;
-        dialog._closing = false;
 
-        const root = dialog.element;
-        const titleEl = root?.querySelector(".window-title");
-        const headerEl = root?.querySelector(".window-header");
-        const pauseIcon = root?.querySelector(`#pauseIcon_${dialogId}`);
-        const pauseBtn = root?.querySelector(`#pauseButton_${dialogId}`);
-
-        const useFullTitleBar = !!game.settings.get("gambits-premades", "enableTimerFullAnim");
-
-        root?.classList.toggle("gps-timer-full", useFullTitleBar);
-        root?.classList.toggle("gps-timer-thin", !useFullTitleBar);
-
-        root?.classList.add("gps-dialog-timer");
-        if (pauseBtn) pauseBtn.classList.add("gps-pause-btn");
-
-        let barEl = headerEl?.querySelector(":scope > .gps-titlebar-progress");
-        if (!barEl && headerEl) {
-            barEl = document.createElement("div");
-            barEl.className = "gps-titlebar-progress";
-            headerEl.prepend(barEl);
-        }
-        if (barEl) {
-            barEl.classList.toggle("gps-titlebar-progress--thin", !useFullTitleBar);
-        }
-
-        const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
-        const initial = Math.max(Number(initialTimeLeft) || 0, 0);
-        const durationMs = initial * 1000;
-
-        if (dialog._uiTicker) clearInterval(dialog._uiTicker);
-        if (dialog._rafId) cancelAnimationFrame(dialog._rafId);
-        if (dialog._barAnim) {
-        try {
-            dialog._barAnim.cancel();
-        } catch (_) {}
-        }
-
-        const canWAAPI = !!barEl && typeof barEl.animate === "function" && durationMs > 0;
-
-        dialog.timeLeft = initial;
-
-        if (canWAAPI) {
-        dialog._barAnim = barEl.animate(
-            [{ transform: "scaleX(1)" }, { transform: "scaleX(0)" }],
-            { duration: durationMs, easing: "linear", fill: "both" }
-        );
-
-        dialog.getTimeLeft = () => {
-            const ct = Number(dialog._barAnim?.currentTime ?? 0);
-            return clamp((durationMs - ct) / 1000, 0, initial);
-        };
-
-        dialog.setTimeLeft = (secs) => {
-            if (!dialog._barAnim) return;
-            const s = clamp(Number(secs) || 0, 0, initial);
-            const ct = durationMs - s * 1000;
-            dialog._barAnim.currentTime = clamp(ct, 0, durationMs);
-        };
-
-        dialog.setPaused = (paused) => {
-            dialog.isPaused = !!paused;
-            if (!dialog._barAnim) return;
-            if (dialog.isPaused) dialog._barAnim.pause();
-            else dialog._barAnim.play();
-        };
-        } else {
-        dialog._endTime = performance.now() + durationMs;
-
-        dialog.getTimeLeft = () => {
-            if (dialog.isPaused) return dialog.timeLeft;
-            const t = Math.max((dialog._endTime - performance.now()) / 1000, 0);
-            return clamp(t, 0, initial);
-        };
-
-        dialog.setTimeLeft = (secs) => {
-            const s = clamp(Number(secs) || 0, 0, initial);
-            dialog.timeLeft = s;
-            if (!dialog.isPaused) dialog._endTime = performance.now() + s * 1000;
-        };
-
-        dialog.setPaused = (paused) => {
-            const next = !!paused;
-            if (next === dialog.isPaused) return;
-            if (next) {
-            dialog.timeLeft = dialog.getTimeLeft();
-            dialog.isPaused = true;
-            } else {
-            dialog.isPaused = false;
-            dialog._endTime = performance.now() + dialog.timeLeft * 1000;
-            }
-        };
-
-        const tick = () => {
-            if (dialog._closing) return;
-
-            const timeLeft = dialog.getTimeLeft();
-            dialog.timeLeft = timeLeft;
-
-            if (barEl && initial > 0) {
-            const ratio = clamp(timeLeft / initial, 0, 1);
-            barEl.style.transform = `scaleX(${ratio})`;
-            }
-
-            if (timeLeft <= 0) dialog.close();
-            else dialog._rafId = requestAnimationFrame(tick);
-        };
-
-        dialog._rafId = requestAnimationFrame(tick);
-        }
-
-        let lastSecondShown = -1;
-        let lastColorTick = 0;
-        let lastPaused = dialog.isPaused;
-
-        dialog.updateUI = (force = false) => {
-        const timeLeft = dialog.getTimeLeft?.() ?? dialog.timeLeft ?? 0;
-        dialog.timeLeft = timeLeft;
-
-        const secs = Math.ceil(timeLeft);
-        if ((force || secs !== lastSecondShown) && titleEl) {
-            titleEl.textContent = `${dialogTitle} - ${secs}s`;
-            lastSecondShown = secs;
-        }
-
-        if (pauseIcon && (force || dialog.isPaused !== lastPaused)) {
-            pauseIcon.classList.toggle("fa-play", dialog.isPaused);
-            pauseIcon.classList.toggle("fa-pause", !dialog.isPaused);
-            lastPaused = dialog.isPaused;
-        }
-
-        const now = performance.now();
-        if (force || now - lastColorTick > 250) {
-            const dialogColors = getDialogColors({ type, source, timeLeft, initialTimeLeft: initial });
-
-            if (root) {
-            root.style.setProperty("--gps-timer-color", dialogColors.borderColorStop);
-            root.style.setProperty("--gps-select-color", dialogColors.selectColor);
-            root.style.setProperty("--gps-option-color", dialogColors.optionColor);
-            root.style.setProperty("--gps-pause-color", dialogColors.pauseColor);
-            }
-
-            lastColorTick = now;
-        }
-
-        if (pauseBtn) pauseBtn.classList.toggle("paused", dialog.isPaused);
-        };
-
-        dialog._uiTicker = setInterval(() => {
-        if (dialog._closing) return;
-        dialog.updateUI(false);
-        }, 200);
-
-        if (canWAAPI && dialog._barAnim) {
-        dialog._barAnim.finished
-            .then(() => {
-            if (!dialog._closing) dialog.close();
-            })
-            .catch(() => {
-            /* cancelled */
-            });
-        }
-
-        dialog.updateUI(true);
+        attachCountdownChrome(dialog, { dialogId, dialogTitle, initialTimeLeft, type, source });
 
         dialog.listeners = attachEventListeners(dialog);
     },
 
     close: async (event, dialog) => {
-        dialog._closing = true;
-
-        if (dialog._uiTicker) clearInterval(dialog._uiTicker);
-        if (dialog._rafId) cancelAnimationFrame(dialog._rafId);
-        if (dialog._barAnim) {
-        try {
-            dialog._barAnim.cancel();
-        } catch (_) {}
-        }
-
-        dialog.timeLeft = 0;
+        detachCountdownChrome(dialog);
 
         clearInterval(dialog.timer);
 
