@@ -913,7 +913,7 @@
             "TargetMoreThan150": "The target has more than 150 hit points and is not stunned, but its speed is reduced to 0 until the start of the casters next turn."
           },
           "Sleep2024": {
-            "TargetImmuneToSleepOrExhaustion": "Automatically succeeds: immune to magical sleep or to the Exhaustion condition."
+            "TargetImmuneToSleepOrExhaustion": "Automatically succeeds: this creature doesn't sleep, or is immune to the Exhaustion condition."
           },
           "Entangle2024": {
             "NoOrigin": "This Entangle effect has no source item, so its escape DC cannot be resolved.",

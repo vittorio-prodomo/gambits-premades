@@ -1,3 +1,5 @@
+import { actorDoesNotSleep } from "../../utils/doesNotSleep.mjs";
+
 export async function sleep2024({ speaker, actor, token, character, item, args, scope, workflow, options, rolledItem, rolledActivity, macroItem }) {
     // ⚠️ FORK PATCH (queue T116). This branch was registered under "preSavesComplete", which is NOT
     // a midi macro pass — it appears at no call site in midi, and `OnUseMacros#getMacros` matches the
@@ -10,7 +12,15 @@ export async function sleep2024({ speaker, actor, token, character, item, args, 
     if(args?.[0].macroPass === "postSave") {
         let reclassified = false;
         for (let target of workflow.failedSaves) {
-            if(target.actor.system.traits.ci.custom.includes("Magical Sleep") || target.actor.system.traits.ci.value.has("exhaustion")) {
+            // ⚠️ FORK PATCH (queue T122). This was `ci.custom.includes("Magical Sleep") ||
+            // ci.value.has("exhaustion")` — and NOTHING in this stack writes "Magical Sleep", so the
+            // elf half matched nobody. The party's real value is ";Sleep" (ddb-importer generates it
+            // from the 2024 Trance feature), and a survey found those two PCs are the ONLY actors in
+            // the world with any custom trait at all. The 08-02 verification set the string by hand,
+            // which is why it passed while the rule stayed dead at the table.
+            // The predicate now covers exhaustion, a loosely-matched declared immunity, Undead and
+            // Constructs, and elf lineages — see doesNotSleep.mjs for why each limb is load-bearing.
+            if(actorDoesNotSleep(target.actor)) {
                 workflow.failedSaves.delete(target);
                 workflow.saves.add(target);
                 reclassified = true;

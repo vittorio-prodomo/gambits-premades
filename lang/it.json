@@ -4,7 +4,7 @@
       "Automations2024": {
         "Spells": {
           "Sleep2024": {
-            "TargetImmuneToSleepOrExhaustion": "Supera automaticamente: è immune al sonno magico o alla condizione Sfinimento."
+            "TargetImmuneToSleepOrExhaustion": "Supera automaticamente: questa creatura non dorme, o è immune alla condizione Sfinimento."
           },
           "Entangle2024": {
             "NoOrigin": "Questo effetto Intralciare non ha un oggetto di origine, quindi non è possibile determinare la CD per liberarsi.",
