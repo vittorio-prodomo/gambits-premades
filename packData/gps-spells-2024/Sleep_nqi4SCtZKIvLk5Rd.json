@@ -508,7 +508,7 @@
       "reactionCondition": "",
       "otherCondition": "",
       "effectCondition": "",
-      "onUseMacroName": "[preSavesComplete]function.game.gps.sleep2024"
+      "onUseMacroName": "[postSave]function.game.gps.sleep2024"
     },
     "midiProperties": {
       "autoFailFriendly": false,
