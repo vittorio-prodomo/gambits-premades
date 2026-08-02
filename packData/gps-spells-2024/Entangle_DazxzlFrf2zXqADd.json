@@ -86,7 +86,13 @@
           "concentration": false,
           "override": false
         },
-        "effects": [],
+        "effects": [
+          {
+            "_id": "GPSEntangleRest1",
+            "onSave": false,
+            "level": {}
+          }
+        ],
         "range": {
           "override": false,
           "units": "self"
@@ -407,7 +413,7 @@
       "ida": false
     },
     "midi-qol": {
-      "onUseMacroName": "[preActiveEffects]function.game.gps.entangle2024,[postSave]function.game.gps.entangle2024",
+      "onUseMacroName": "[preActiveEffects]function.game.gps.entangle2024,[postSave]function.game.gps.entangle2024,[postActiveEffects]function.game.gps.entangle2024",
       "forceCEOff": true,
       "effectActivation": false,
       "AoETargetType": "any",
@@ -766,7 +772,58 @@
       "actionSection": ""
     }
   },
-  "effects": [],
+  "effects": [
+    {
+      "name": "Entangle: Restrained",
+      "_id": "GPSEntangleRest1",
+      "type": "base",
+      "img": "icons/magic/nature/vines-thorned-curled-glow-green.webp",
+      "origin": null,
+      "disabled": false,
+      "transfer": false,
+      "description": "",
+      "tint": "#ffffff",
+      "sort": 0,
+      "system": {},
+      "changes": [],
+      "statuses": [
+        "restrained"
+      ],
+      "duration": {
+        "rounds": null,
+        "startTime": null,
+        "seconds": null,
+        "combat": null,
+        "turns": null,
+        "startRound": null,
+        "startTurn": null
+      },
+      "flags": {
+        "gambits-premades": {
+          "entangleRestrained": true
+        },
+        "dae": {
+          "disableCondition": "",
+          "disableIncapacitated": false,
+          "stackable": "noneName",
+          "showIcon": false,
+          "durationExpression": "",
+          "macroRepeat": "none",
+          "specialDuration": [],
+          "enableCondition": "",
+          "selfTarget": false,
+          "selfTargetAlways": false,
+          "dontApply": false
+        },
+        "dnd5e": {
+          "riders": {
+            "statuses": []
+          }
+        }
+      },
+      "_key": "!items.effects!DazxzlFrf2zXqADd.GPSEntangleRest1"
+    }
+  ],
   "img": "icons/magic/nature/vines-thorned-curled-glow-green.webp",
   "folder": null,
   "_id": "DazxzlFrf2zXqADd",

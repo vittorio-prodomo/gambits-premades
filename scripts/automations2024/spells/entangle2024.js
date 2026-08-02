@@ -1,19 +1,37 @@
 export async function entangle2024({ tokenUuid, regionUuid, regionScenario, speaker, actor, token, character, item, args, scope, workflow, options }) {
+    // ⚠️ FORK PATCH (queue T114). Restrained used to be applied here by hand as a BARE CORE STATUS
+    // via `gmToggleStatus`, which carries no origin and ties the condition to nothing — so no VAE
+    // button could find its way back to the spell, and ending concentration left the vines behind.
+    // It is now a real named effect authored in packData and listed in the save activity's `effects`
+    // array (`onSave: false`), exactly as Sleep does in this same module, so midi/DAE apply it and
+    // it gets an `origin` for free. This loop therefore only draws the animation.
+    // ⚠️ The caster is NO LONGER exempt (Vittorio 2026-08-02): the old loop skipped `token`, but RAW
+    // the spell restrains *each creature in that area*, and the item already sets midi's
+    // `AoETargetTypeIncludeSelf`, so a caster standing in their own vines was being targeted, made to
+    // save, and then silently spared. Letting midi apply to every failed save is the RAW behaviour.
     if(args?.[0].macroPass === "postSave")
     {
         const template = await fromUuid(workflow.templateUuid);
         const targets = Array.from(workflow.failedSaves);
 
-        for (let target of targets) {
-            if(target.document.uuid === token.document.uuid) continue;
-            const hasEffectApplied = target.document.hasStatusEffect("restrained");
-
-            if (!hasEffectApplied) {
-                await game.gps.socket.executeAsGM("gmToggleStatus", {tokenUuid: `${target.document.uuid}`, status: "restrained", active: true });
-            }
-        }
-
         await game.gps.animation.entangle({template, itemUuid: workflow.item.uuid, targets, token});
+    }
+
+    // ⚠️ Nothing in this stack links an activity-applied effect to the caster's concentration:
+    // DAE's `doActivityEffects` sets `origin` only, and midi's `dependentOn` wiring sits in the
+    // Convenient-Effects branch, which this item disables (`forceCEOff`). So the link is made
+    // explicitly here, at `postActiveEffects` — the first pass at which the effects exist.
+    // ⚠️ `MidiQOL.addConcentrationDependent` resolves the concentration through `actor.concentration`,
+    // NOT through `chatCard.flags.dnd5e.use.concentrationId`, which is null on this path (T116).
+    // ⚠️ Registering a new pass means declaring it in the packData `onUseMacroName` too, or it is
+    // silently never called (T116).
+    if(args?.[0].macroPass === "postActiveEffects")
+    {
+        for (let target of workflow.failedSaves) {
+            const applied = target.actor?.effects?.find(e => e.flags?.["gambits-premades"]?.entangleRestrained);
+            if (!applied) continue;
+            await MidiQOL.addConcentrationDependent(workflow.actor, applied, workflow.item);
+        }
     }
 
     if(regionScenario === "tokenTurnStart") {
@@ -28,7 +46,10 @@ export async function entangle2024({ tokenUuid, regionUuid, regionScenario, spea
         actor = tokenDocument.actor;
         item = await fromUuid(region.flags["region-attacher"].itemUuid);
 
-        const hasEffectApplied = tokenDocument.hasStatusEffect("restrained");
+        // ⚠️ Gate on OUR effect, not on the `restrained` status (T114): a creature restrained by
+        // something else standing in the vines would otherwise be offered an Entangle escape that
+        // could not free it.
+        const hasEffectApplied = !!tokenDocument.actor?.effects?.find(e => e.flags?.["gambits-premades"]?.entangleRestrained);
         if(!hasEffectApplied) return;
 
         let dialogId = "entangle";
@@ -70,25 +91,33 @@ export async function entangle2024({ tokenUuid, regionUuid, regionScenario, spea
 
             if (saveResult.failedSaves.size === 0)
             {
-                const hasEffectApplied = tokenDocument.hasStatusEffect("restrained");
-
-                if (hasEffectApplied) {
-                    await game.gps.socket.executeAsGM("gmToggleStatus", {tokenUuid: `${tokenDocument.uuid}`, status: "restrained", active: false });
-                }
-
-                Sequencer.EffectManager.endEffects({ name: `${tokenDocument.id}Entangle`, object: token });
+                await releaseFromEntangle(tokenDocument);
             }
         }
     }
 
     if(regionScenario === "tokenExits") {
         let tokenDocument = await fromUuid(tokenUuid);
-        const hasEffectApplied = tokenDocument.hasStatusEffect("restrained");
-
-        if (hasEffectApplied) {
-            await game.gps.socket.executeAsGM("gmToggleStatus", {tokenUuid: `${tokenDocument.uuid}`, status: "restrained", active: false });
-        }
-
-        Sequencer.EffectManager.endEffects({ name: `${tokenDocument.id}Entangle`, object: token });
+        await releaseFromEntangle(tokenDocument);
     }
+}
+
+/**
+ * End one creature's entanglement: delete the effect and stop its vines animation. (T114)
+ *
+ * ⚠️ Deliberately keyed on OUR flag, not on the `restrained` status: a creature can be Restrained by
+ * something else at the same time, and the old `gmToggleStatus(active:false)` would have cleared that
+ * too. Deleting our own named effect removes only what Entangle applied — and because the effect
+ * carries `statuses: ["restrained"]`, the condition lifts with it unless another source still grants it.
+ *
+ * Shared by the turn-start escape, the region exit, and the VAE button, so the three paths cannot drift.
+ * @param {TokenDocument} tokenDocument The restrained creature's token.
+ * @returns {Promise<boolean>} Whether an Entangle effect was found and removed.
+ */
+export async function releaseFromEntangle(tokenDocument) {
+    if(!tokenDocument?.actor) return false;
+    const applied = tokenDocument.actor.effects.find(e => e.flags?.["gambits-premades"]?.entangleRestrained);
+    if(applied) await game.gps.socket.executeAsGM("gmDeleteEffect", { effectUuid: applied.uuid });
+    Sequencer.EffectManager.endEffects({ name: `${tokenDocument.id}Entangle`, object: tokenDocument.object });
+    return !!applied;
 }

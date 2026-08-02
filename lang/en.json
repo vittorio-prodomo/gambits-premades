@@ -813,6 +813,9 @@
               "UseYourAction": {
                 "Default": "Would you like to use your action to make an Athletics ability check to escape being Restrained?"
               }
+            },
+            "Buttons": {
+              "Escape": "Escape the vines (Athletics)"
             }
           },
           "PowerWordHeal2024": {
@@ -911,6 +914,10 @@
           },
           "Sleep2024": {
             "TargetImmuneToSleepOrExhaustion": "Automatically succeeds: immune to magical sleep or to the Exhaustion condition."
+          },
+          "Entangle2024": {
+            "NoOrigin": "This Entangle effect has no source item, so its escape DC cannot be resolved.",
+            "NoToken": "No token found for this creature, so the escape check cannot be rolled."
           }
         }
       },

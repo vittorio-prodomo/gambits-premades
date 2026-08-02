@@ -2,6 +2,7 @@
   "name": "gambits-premades",
   "type": "commonjs",
   "scripts": {
+    "test": "node --test \"scripts/**/*.test.mjs\"",
     "release": "node update-module.js",
     "prepare": "husky install",
     "packData": "node --experimental-top-level-await ./packData/packData.mjs",

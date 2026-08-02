@@ -7,6 +7,7 @@ import { refreshTemplateVisibility, registerWrapping, updateSettings } from "./u
 import * as helpers from "./utils/helpers.js";
 import { weaponAnimations } from "./utils/animationUtils.js";
 import { animation } from './animations/_index.js';
+import { registerVaeButtons } from './utils/vaeButtons.js';
 
 Hooks.once('init', async function() {
     registerSettings();
@@ -72,6 +73,7 @@ Hooks.once('socketlib.ready', async function() {
 	game.gps.socket.register("addReaction", helpers.addReaction);
     game.gps.socket.register("gmUpdateDisposition", helpers.gmUpdateDisposition);
     game.gps.socket.register("gmToggleStatus", helpers.gmToggleStatus);
+    game.gps.socket.register("gmDeleteEffect", helpers.gmDeleteEffect);
     game.gps.socket.register("replaceChatCard", helpers.replaceChatCard);
     game.gps.socket.register("ritualSpellUse", helpers.ritualSpellUse);
     game.gps.socket.register("getBrowserUser", helpers.getBrowserUser);
@@ -102,5 +104,6 @@ Hooks.once('ready', async function() {
     if(game.user.isGM && !game.settings.get("gambits-premades", "primaryGM")) game.settings.set("gambits-premades", "primaryGM", game.users.activeGM?.id);
 
     registerHooks();
+    registerVaeButtons();
     daeInjectFlags();
 });

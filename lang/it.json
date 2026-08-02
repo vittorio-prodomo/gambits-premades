@@ -5,6 +5,21 @@
         "Spells": {
           "Sleep2024": {
             "TargetImmuneToSleepOrExhaustion": "Supera automaticamente: è immune al sonno magico o alla condizione Sfinimento."
+          },
+          "Entangle2024": {
+            "NoOrigin": "Questo effetto Intralciare non ha un oggetto di origine, quindi non è possibile determinare la CD per liberarsi.",
+            "NoToken": "Nessun token trovato per questa creatura, quindi la prova per liberarsi non può essere tirata."
+          }
+        }
+      }
+    },
+    "Dialogs": {
+      "Automations2024": {
+        "Spells": {
+          "Entangle2024": {
+            "Buttons": {
+              "Escape": "Divincolati dai rovi (Atletica)"
+            }
           }
         }
       }

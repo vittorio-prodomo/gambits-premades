@@ -34,6 +34,15 @@ export async function gmToggleStatus({ tokenUuid, status, active }) {
     if(token) token.actor.toggleStatusEffect(status, { active, overlay: false });
 }
 
+// Added for queue T114: the counterpart to gmToggleStatus for automations that apply a real named
+// effect instead of a bare core status. Routed through the GM for the same reason gmToggleStatus is
+// — a region event or a reaction dialog can fire on a client that does not own the affected actor.
+export async function gmDeleteEffect({ effectUuid }) {
+    if(!effectUuid) return;
+    let effect = await fromUuid(effectUuid);
+    if(effect) await effect.delete();
+}
+
 export async function freeSpellUse({ item, actor, activity }) {
     const targets = activity?.consumption?.targets ?? [];
     const isItemUse = targets.some(t => t.type === "itemUses");
