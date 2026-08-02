@@ -8,13 +8,39 @@ export async function sleep2024({ speaker, actor, token, character, item, args, 
     // ⚠️ Changing this means changing the packData `onUseMacroName`/`onUseMacroParts` too; the JS
     // check and the flag must agree or the pass goes inert again in the other direction.
     if(args?.[0].macroPass === "postSave") {
+        let reclassified = false;
         for (let target of workflow.failedSaves) {
             if(target.actor.system.traits.ci.custom.includes("Magical Sleep") || target.actor.system.traits.ci.value.has("exhaustion")) {
                 workflow.failedSaves.delete(target);
                 workflow.saves.add(target);
-                ui.notifications.warn(game.i18n.localize("GAMBITSPREMADES.Notifications.Automations2024.Spells.Sleep2024.TargetImmuneToSleepOrExhaustion"))
+                reclassified = true;
+
+                // ⚠️ The card is drawn BEFORE this pass runs (`displaySaves` at Workflow.ts:2782,
+                // `postSave` at :2792, with no re-render in between), so reclassifying alone leaves
+                // the card showing a FAILED save for a creature we are treating as having succeeded.
+                // Repaint that target's row from midi's own display data, then re-render below.
+                const row = workflow.saveDisplayData?.find(d => d.id === target.id);
+                if(row) {
+                    row.saveClass = "success";
+                    row.saveSymbol = (row.saveSymbol ?? "").replace("fa-xmark", "fa-check");
+                    // midi's per-target attribution tooltip is the natural home for the reason: it is
+                    // permanent, attached to the right creature, and visible to everyone who can see
+                    // the card — unlike the `ui.notifications.warn` this replaces, which was transient,
+                    // unattributed, and only ever rendered on the one client that ran the macro.
+                    // ⚠️ `attributionTooltip` is stored HTML-ESCAPED (the template emits it into
+                    // data-tooltip-html via a triple-stash), so an addition must be escaped the same way.
+                    // ⚠️ Deliberately does NOT name the creature: the row already identifies it, and an
+                    // unnamed string cannot leak a veiled name if this card is composed GM-side.
+                    const reason = game.i18n.localize("GAMBITSPREMADES.Notifications.Automations2024.Spells.Sleep2024.TargetImmuneToSleepOrExhaustion");
+                    const escaped = foundry.utils.escapeHTML(reason);
+                    row.attributionTooltip = row.attributionTooltip ? `${row.attributionTooltip}<br>${escaped}` : escaped;
+                    row.hasAttribution = true;
+                }
             }
         }
+        // ⚠️ Safe to re-call: `displaySaves` REPLACES its block by regex rather than appending, so a
+        // second render simply redraws the saves section from the corrected data.
+        if(reclassified) await workflow.displaySaves(false);
 
         // T116 (Vittorio's call, 2026-08-02): nobody is going to sleep, so there is nothing left to
         // concentrate on — drop it rather than leaving a dead concentration occupying the slot.

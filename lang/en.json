@@ -910,7 +910,7 @@
             "TargetMoreThan150": "The target has more than 150 hit points and is not stunned, but its speed is reduced to 0 until the start of the casters next turn."
           },
           "Sleep2024": {
-            "TargetImmuneToSleepOrExhaustion": "Creature is immune to magical sleep and/or being exhausted."
+            "TargetImmuneToSleepOrExhaustion": "Automatically succeeds: immune to magical sleep or to the Exhaustion condition."
           }
         }
       },

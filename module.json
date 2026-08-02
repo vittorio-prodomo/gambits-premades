@@ -344,6 +344,11 @@
       "lang": "cn",
       "name": "中文 (Chinese)",
       "path": "lang/cn.json"
+    },
+    {
+      "lang": "it",
+      "name": "Italiano",
+      "path": "lang/it.json"
     }
   ]
 }

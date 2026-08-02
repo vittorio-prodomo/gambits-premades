@@ -1,0 +1,13 @@
+{
+  "GAMBITSPREMADES": {
+    "Notifications": {
+      "Automations2024": {
+        "Spells": {
+          "Sleep2024": {
+            "TargetImmuneToSleepOrExhaustion": "Supera automaticamente: è immune al sonno magico o alla condizione Sfinimento."
+          }
+        }
+      }
+    }
+  }
+}
