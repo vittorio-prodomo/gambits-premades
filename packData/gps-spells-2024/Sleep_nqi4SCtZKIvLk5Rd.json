@@ -79,10 +79,10 @@
           "chatFlavor": ""
         },
         "duration": {
-          "units": "round",
-          "override": true,
-          "concentration": true,
-          "value": "1"
+          "units": "inst",
+          "override": false,
+          "concentration": false,
+          "value": null
         },
         "effects": [
           {
@@ -217,7 +217,7 @@
         "duration": {
           "units": "inst",
           "concentration": false,
-          "override": false
+          "override": true
         },
         "effects": [
           {
