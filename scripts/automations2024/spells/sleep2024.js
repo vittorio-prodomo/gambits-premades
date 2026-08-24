@@ -14,6 +14,26 @@ export async function sleep2024({ speaker, actor, token, character, item, args, 
     // check and the flag must agree or the pass goes inert again in the other direction.
     if(args?.[0].macroPass === "postSave") {
         let reclassified = false;
+        // T133 follow-up (Vittorio 2026-08-24): an immune creature must read AUTOSUCCESS even when
+        // its die happened to beat the DC on its own — the immunity, not the roll, is the story.
+        // Painted ids are tracked so a creature moved out of failedSaves below is not painted twice
+        // (the tooltip append is not idempotent).
+        const paintedIds = new Set();
+        const paintRow = (target) => {
+            const row = workflow.saveDisplayData?.find(d => d.id === target.id);
+            if(!row || paintedIds.has(target.id)) return;
+            paintedIds.add(target.id);
+            paintAutoSuccessRow(row, {
+                label: game.i18n.localize("GAMBITSPREMADES.AutoSuccess.Label"),
+                // ⚠️ Deliberately does NOT name the creature: the row already identifies it,
+                // and an unnamed string cannot leak a veiled name if the card is composed GM-side.
+                reason: game.i18n.localize("GAMBITSPREMADES.Notifications.Automations2024.Spells.Sleep2024.TargetImmuneToSleepOrExhaustion")
+            });
+            reclassified = true;
+        };
+        for (let target of workflow.saves) {
+            if(actorDoesNotSleep(target.actor)) paintRow(target);
+        }
         for (let target of workflow.failedSaves) {
             // ⚠️ FORK PATCH (queue T122). This was `ci.custom.includes("Magical Sleep") ||
             // ci.value.has("exhaustion")` — and NOTHING in this stack writes "Magical Sleep", so the
@@ -26,26 +46,12 @@ export async function sleep2024({ speaker, actor, token, character, item, args, 
             if(actorDoesNotSleep(target.actor)) {
                 workflow.failedSaves.delete(target);
                 workflow.saves.add(target);
-                reclassified = true;
-
                 // ⚠️ The card is drawn BEFORE this pass runs (`displaySaves` at Workflow.ts:2782,
                 // `postSave` at :2792, with no re-render in between), so reclassifying alone leaves
                 // the card showing a FAILED save for a creature we are treating as having succeeded.
-                // Repaint that target's row from midi's own display data, then re-render below.
-                // Queue T133: the repaint (class, symbol, AUTOSUCCESS total, escaped attribution
-                // tooltip) is now the shared house convention in utils/autoSuccessRow.mjs — the
-                // displayed total becomes a localized AUTOSUCCESS label (Vittorio: "seeing an 11 in
-                // a green row below a DC of 13 is ugly"), while the real roll stays on hover
-                // because `rollHTML` is untouched.
-                const row = workflow.saveDisplayData?.find(d => d.id === target.id);
-                if(row) {
-                    paintAutoSuccessRow(row, {
-                        label: game.i18n.localize("GAMBITSPREMADES.AutoSuccess.Label"),
-                        // ⚠️ Deliberately does NOT name the creature: the row already identifies it,
-                        // and an unnamed string cannot leak a veiled name if the card is composed GM-side.
-                        reason: game.i18n.localize("GAMBITSPREMADES.Notifications.Automations2024.Spells.Sleep2024.TargetImmuneToSleepOrExhaustion")
-                    });
-                }
+                // paintRow repaints from midi's own display data (the T133 house convention:
+                // AUTOSUCCESS total, success class, escaped attribution tooltip; real roll on hover).
+                paintRow(target);
             }
         }
         // ⚠️ Safe to re-call: `displaySaves` REPLACES its block by regex rather than appending, so a

@@ -68,6 +68,15 @@ async function rollSleepStageTwo(effect) {
         identifier: "syntheticSave",
         targetUuid: tokenDocument.uuid
     });
+
+    // T130 follow-up (Vittorio 2026-08-24): consume the Incapacitated effect either way, matching
+    // the in-combat semantics where the turn-end EXPIRY precedes the stage-2 save. RAW: a
+    // successful second save leaves the creature free (the Incapacitated duration was "until the
+    // end of its next turn" — there is no third save); a failed one has Unconscious applied by the
+    // syntheticSave activity, and this sleep-specific Incapacitated must not linger beside it.
+    // ⚠️ This deletion fires the DAE off macro with reason 'effect-deleted' — the T130 gate keeps
+    // it silent, so no loop.
+    await effect.delete().catch(() => {});
 }
 
 /**
