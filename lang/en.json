@@ -828,8 +828,10 @@
                     "Sleep2024": {
                         "TargetConfirm": {
                             "Title": "Sleep — choose your targets",
-                            "Content": "Sleep affects each creature <b>of your choice</b> in the Sphere. Untick any creature you do not want the spell to target.",
-                            "Confirm": "Confirm"
+                            "Content": "Sleep affects each creature <b>of your choice</b> in the Sphere. Untick any creature you do not want the spell to target. Cancelling or closing this dialog cancels the cast and refunds the spell slot.",
+                            "Confirm": "Confirm",
+                            "ExtrasHint": "Greyed creatures are in the Sphere but not hostile — tick one to deliberately include it.",
+                            "Cancel": "Cancel the cast"
                         },
                         "Buttons": {
                             "StageTwoSave": "Roll save vs Unconscious"
@@ -925,7 +927,8 @@
                     "Sleep2024": {
                         "TargetImmuneToSleepOrExhaustion": "Automatically succeeds: this creature doesn't sleep, or is immune to the Exhaustion condition.",
                         "NoOrigin": "Could not resolve the Sleep spell behind this effect.",
-                        "NoToken": "No token found for this creature."
+                        "NoToken": "No token found for this creature.",
+                        "CastCancelled": "Sleep cancelled — the spell slot has been refunded."
                     },
                     "Entangle2024": {
                         "NoOrigin": "This Entangle effect has no source item, so its escape DC cannot be resolved.",

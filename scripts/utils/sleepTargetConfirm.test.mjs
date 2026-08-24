@@ -3,11 +3,12 @@ import assert from 'node:assert/strict';
 import {buildSleepConfirmRows, applyConfirmSelection} from './sleepTargetConfirm.mjs';
 
 /*
- * Queue T131: RAW 2024 Sleep is "Each creature of your choice in a 5-foot-radius Sphere", but the
- * template auto-targeting swept in every covered creature. The caster now gets a confirmation
- * dialog listing the covered creatures with untick boxes; unticked ones are dropped from the
- * workflow's target set before any save rolls. These are the pure halves: row building from
- * tokens, and applying the kept-id selection to a Set of tokens.
+ * Queue T131 (+ the 08-24 follow-up): RAW 2024 Sleep is "Each creature of your choice in a
+ * 5-foot-radius Sphere". The caster's confirmation dialog lists BOTH the auto-targeted creatures
+ * (ticked) and the covered-but-not-auto-targeted ones — allies, which midi's disposition filter
+ * excludes (Vittorio 2026-08-24: include them, but UNTICKED, so hitting an ally is a conscious
+ * choice). Applying the selection can therefore both REMOVE unticked auto-targets and ADD ticked
+ * extras.
  */
 
 const fakeToken = (id, name, img) => ({
@@ -16,15 +17,20 @@ const fakeToken = (id, name, img) => ({
     document: {texture: {src: img}, name}
 });
 
-test('builds one row per target with id, name and image', () => {
-    const rows = buildSleepConfirmRows([
-        fakeToken('a1', 'Goblin A', 'goblin-a.webp'),
-        fakeToken('b2', 'Goblin B', 'goblin-b.webp')
-    ]);
+test('builds ticked rows for auto-targets and unticked rows for covered extras, in that order', () => {
+    const rows = buildSleepConfirmRows(
+        [fakeToken('a1', 'Goblin A', 'a.webp')],
+        [fakeToken('w1', 'Warpey', 'w.webp')]
+    );
     assert.deepEqual(rows, [
-        {id: 'a1', name: 'Goblin A', img: 'goblin-a.webp'},
-        {id: 'b2', name: 'Goblin B', img: 'goblin-b.webp'}
+        {id: 'a1', name: 'Goblin A', img: 'a.webp', checked: true, extra: false},
+        {id: 'w1', name: 'Warpey', img: 'w.webp', checked: false, extra: true}
     ]);
+});
+
+test('no extras still works (the original shape)', () => {
+    const rows = buildSleepConfirmRows([fakeToken('a1', 'A', 'a.webp')]);
+    assert.deepEqual(rows, [{id: 'a1', name: 'A', img: 'a.webp', checked: true, extra: false}]);
 });
 
 test('falls back to the document name when the token object has none', () => {
@@ -32,26 +38,45 @@ test('falls back to the document name when the token object has none', () => {
     assert.equal(buildSleepConfirmRows([t])[0].name, 'Doc Name');
 });
 
-test('applyConfirmSelection removes only the unticked tokens from the set', () => {
-    const a = fakeToken('a1', 'A'), b = fakeToken('b2', 'B'), c = fakeToken('c3', 'C');
-    const targets = new Set([a, b, c]);
-    const removed = applyConfirmSelection(targets, ['a1', 'c3']);
-    assert.deepEqual([...targets], [a, c]);
+test('removes unticked auto-targets and adds ticked extras', () => {
+    const a = fakeToken('a1', 'A'), b = fakeToken('b2', 'B'), w = fakeToken('w1', 'W');
+    const targets = new Set([a, b]);
+    const {removed, added} = applyConfirmSelection(targets, ['a1', 'w1'], [w]);
+    assert.deepEqual([...targets], [a, w]);
     assert.deepEqual(removed.map(t => t.id), ['b2']);
+    assert.deepEqual(added.map(t => t.id), ['w1']);
 });
 
-test('keeping every id removes nothing', () => {
+test('unticked extras stay out', () => {
+    const a = fakeToken('a1', 'A'), w = fakeToken('w1', 'W');
+    const targets = new Set([a]);
+    const {removed, added} = applyConfirmSelection(targets, ['a1'], [w]);
+    assert.deepEqual([...targets], [a]);
+    assert.deepEqual(removed, []);
+    assert.deepEqual(added, []);
+});
+
+test('keeping every auto-target and no extras removes and adds nothing', () => {
     const a = fakeToken('a1', 'A'), b = fakeToken('b2', 'B');
     const targets = new Set([a, b]);
-    const removed = applyConfirmSelection(targets, ['a1', 'b2']);
+    const {removed, added} = applyConfirmSelection(targets, ['a1', 'b2'], []);
     assert.equal(targets.size, 2);
     assert.deepEqual(removed, []);
+    assert.deepEqual(added, []);
 });
 
-test('an empty kept list empties the set (caster deselected everyone)', () => {
+test('an empty kept list empties the set', () => {
     const a = fakeToken('a1', 'A');
     const targets = new Set([a]);
-    const removed = applyConfirmSelection(targets, []);
+    const {removed} = applyConfirmSelection(targets, [], []);
     assert.equal(targets.size, 0);
     assert.deepEqual(removed.map(t => t.id), ['a1']);
+});
+
+test('an extra already in the target set is not double-added', () => {
+    const a = fakeToken('a1', 'A');
+    const targets = new Set([a]);
+    const {added} = applyConfirmSelection(targets, ['a1'], [a]);
+    assert.equal(targets.size, 1);
+    assert.deepEqual(added, []);
 });
