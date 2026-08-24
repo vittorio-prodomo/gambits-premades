@@ -1,4 +1,7 @@
 import { actorDoesNotSleep } from "../../utils/doesNotSleep.mjs";
+import { shouldFireSleepStage2 } from "../../utils/sleepStage2Gate.mjs";
+import { paintAutoSuccessRow } from "../../utils/autoSuccessRow.mjs";
+import { buildSleepConfirmRows, applyConfirmSelection } from "../../utils/sleepTargetConfirm.mjs";
 
 export async function sleep2024({ speaker, actor, token, character, item, args, scope, workflow, options, rolledItem, rolledActivity, macroItem }) {
     // ⚠️ FORK PATCH (queue T116). This branch was registered under "preSavesComplete", which is NOT
@@ -29,22 +32,19 @@ export async function sleep2024({ speaker, actor, token, character, item, args, 
                 // `postSave` at :2792, with no re-render in between), so reclassifying alone leaves
                 // the card showing a FAILED save for a creature we are treating as having succeeded.
                 // Repaint that target's row from midi's own display data, then re-render below.
+                // Queue T133: the repaint (class, symbol, AUTOSUCCESS total, escaped attribution
+                // tooltip) is now the shared house convention in utils/autoSuccessRow.mjs — the
+                // displayed total becomes a localized AUTOSUCCESS label (Vittorio: "seeing an 11 in
+                // a green row below a DC of 13 is ugly"), while the real roll stays on hover
+                // because `rollHTML` is untouched.
                 const row = workflow.saveDisplayData?.find(d => d.id === target.id);
                 if(row) {
-                    row.saveClass = "success";
-                    row.saveSymbol = (row.saveSymbol ?? "").replace("fa-xmark", "fa-check");
-                    // midi's per-target attribution tooltip is the natural home for the reason: it is
-                    // permanent, attached to the right creature, and visible to everyone who can see
-                    // the card — unlike the `ui.notifications.warn` this replaces, which was transient,
-                    // unattributed, and only ever rendered on the one client that ran the macro.
-                    // ⚠️ `attributionTooltip` is stored HTML-ESCAPED (the template emits it into
-                    // data-tooltip-html via a triple-stash), so an addition must be escaped the same way.
-                    // ⚠️ Deliberately does NOT name the creature: the row already identifies it, and an
-                    // unnamed string cannot leak a veiled name if this card is composed GM-side.
-                    const reason = game.i18n.localize("GAMBITSPREMADES.Notifications.Automations2024.Spells.Sleep2024.TargetImmuneToSleepOrExhaustion");
-                    const escaped = foundry.utils.escapeHTML(reason);
-                    row.attributionTooltip = row.attributionTooltip ? `${row.attributionTooltip}<br>${escaped}` : escaped;
-                    row.hasAttribution = true;
+                    paintAutoSuccessRow(row, {
+                        label: game.i18n.localize("GAMBITSPREMADES.AutoSuccess.Label"),
+                        // ⚠️ Deliberately does NOT name the creature: the row already identifies it,
+                        // and an unnamed string cannot leak a veiled name if the card is composed GM-side.
+                        reason: game.i18n.localize("GAMBITSPREMADES.Notifications.Automations2024.Spells.Sleep2024.TargetImmuneToSleepOrExhaustion")
+                    });
                 }
             }
         }
@@ -76,8 +76,101 @@ export async function sleep2024({ speaker, actor, token, character, item, args, 
     }
 
     else if (args?.[0] === "off") {
+        // ⚠️ FORK PATCH (queue T130). DAE fires this branch on ANY removal of the Incapacitated
+        // effect — but only times-up's end-of-turn expiry is the RAW stage-2 trigger. Unconditional,
+        // this put two goblins to sleep AFTER Nigel's concentration had ended: the teardown deleted
+        // the effect, the branch fired, and the "save vs Unconscious" ran against a dead spell.
+        // The deletion's reason rides in DAE's lastArg (`expiry-reason`): 'times-up:turnEnd' is the
+        // legit path; concentration teardown / manual removal / Medkit passes arrive as
+        // 'effect-deleted' (DAE's default) and must stay silent.
+        // Outside combat the stage-2 save never auto-fires (Vittorio 2026-08-24) — the VAE button on
+        // the effect (utils/vaeButtons.js) is the manual trigger for out-of-combat play.
+        const lastArg = typeof args[args.length - 1] === "object" ? args[args.length - 1] : {};
+        // ⚠️ The applied effect's `origin` is the caster's CONCENTRATION effect, not the item
+        // ([[gps-fork-setup]] §T114) — which makes it exactly the "is the spell still live?" probe:
+        // on a turnEnd expiry it still resolves, on a concentration teardown it is already gone.
+        const concentrationAlive = !!(lastArg.origin && await fromUuid(lastArg.origin));
+        if (!shouldFireSleepStage2({
+            expiryReason: lastArg["expiry-reason"],
+            combatStarted: !!game.combat?.started,
+            concentrationAlive
+        })) return;
+
         let gmUser = game.gps.getPrimaryGM();
         item = await fromUuid(args[2]);
         await game.gps.socket.executeAsUser("gpsActivityUse", gmUser, {itemUuid: item.uuid, identifier: "syntheticSave", targetUuid: token.document.uuid});
     }
+}
+
+/*
+ * Queue T131 — RAW 2024 Sleep is "Each creature of your choice in a 5-foot-radius Sphere", but
+ * midi's template auto-targeting sweeps in every covered creature. After targeting settles and
+ * BEFORE any save rolls, the caster gets a confirmation dialog listing the covered creatures with
+ * untick boxes (all ticked by default).
+ *
+ * Registered as a GLOBAL midi hook, not an item onUse pass, deliberately:
+ * - `midi-qol.targetingComplete` is awaited (`callCancellableHooks` → `asyncHooksCall`) and fires
+ *   in WorkflowState_PreambleComplete — after AoE targeting, before saves.
+ * - No new pass name means NO packData `onUseMacroName` change, no pack rebuild, and no stale-sheet
+ *   deployment gap (the §T114 trap) — any item wired to `game.gps.sleep2024` gets the dialog.
+ * - The hook runs on the CLIENT DRIVING THE WORKFLOW — the caster's own — so no socket routing.
+ *
+ * ⚠️ The synthetic stage-2 re-save runs a workflow on the SAME item, so it would re-raise the
+ * dialog every turn end without the `syntheticSave` guard.
+ * ⚠️ Close or timeout = keep every target (the pre-T131 behavior), never cancel the cast.
+ */
+export function registerSleepTargetConfirmation() {
+    Hooks.on("midi-qol.targetingComplete", async (workflow) => {
+        const onUse = workflow?.item?.flags?.["midi-qol"]?.onUseMacroName ?? "";
+        if (!onUse.includes("game.gps.sleep2024")) return;
+        if (workflow.activity?.midiProperties?.identifier === "syntheticSave") return;
+        if (!workflow.targets?.size) return;
+
+        const rows = buildSleepConfirmRows(workflow.targets);
+        const rowHtml = rows.map(r => `
+            <label class="gps-sleep-confirm-row" style="display:flex;align-items:center;gap:0.5rem;margin:0.15rem 0;">
+                <input type="checkbox" name="gps-sleep-keep" value="${r.id}" checked>
+                <img src="${r.img}" width="28" height="28" style="border:none;flex:0 0 28px;object-fit:cover;">
+                <span>${foundry.utils.escapeHTML(r.name ?? "")}</span>
+            </label>`).join("");
+        const content = `
+            <p>${game.i18n.localize("GAMBITSPREMADES.Dialogs.Automations2024.Spells.Sleep2024.TargetConfirm.Content")}</p>
+            <div class="gps-sleep-confirm-list">${rowHtml}</div>`;
+
+        const dialogId = "gps-sleep-target-confirm";
+        const initialTimeLeft = 30;
+        let keptIds = null;
+        try {
+            keptIds = await foundry.applications.api.DialogV2.wait({
+                window: { title: game.i18n.localize("GAMBITSPREMADES.Dialogs.Automations2024.Spells.Sleep2024.TargetConfirm.Title") },
+                content,
+                buttons: [{
+                    action: "confirm",
+                    label: game.i18n.localize("GAMBITSPREMADES.Dialogs.Automations2024.Spells.Sleep2024.TargetConfirm.Confirm"),
+                    default: true,
+                    callback: (event, button, dialog) => {
+                        const root = dialog?.element ?? button?.form ?? document;
+                        return [...root.querySelectorAll('input[name="gps-sleep-keep"]:checked')].map(i => i.value);
+                    }
+                }],
+                render: (event, dialog) => {
+                    // House chrome (T106b): shrinking title-bar countdown. Read at CALL time —
+                    // `game.gps` is reassigned wholesale at ready — and null-guarded so a missing
+                    // GPS build degrades to a plain dialog that simply waits.
+                    // ⚠️ attachCountdownChrome owns its own expiry and closes the dialog — the
+                    // `null` result from a closed dialog is handled below as keep-all.
+                    game.gps?.attachCountdownChrome?.(dialog, { dialogId, dialogTitle: dialog?.window?.title, initialTimeLeft });
+                },
+                close: () => null,
+                rejectClose: false
+            });
+        } catch (err) {
+            console.warn("gambits-premades | Sleep target confirmation failed open (keeping all targets)", err);
+        }
+
+        if (!Array.isArray(keptIds)) return; // closed / timed out / errored → pre-T131 behavior
+        const removed = applyConfirmSelection(workflow.targets, keptIds);
+        // Release the canvas targeting of dropped creatures so the table view agrees with the card.
+        for (const t of removed) t.setTarget?.(false, { releaseOthers: false, groupSelection: true });
+    });
 }

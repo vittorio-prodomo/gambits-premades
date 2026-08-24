@@ -18,12 +18,55 @@ export function registerVaeButtons() {
     if (!game.modules.get("visual-active-effects")?.active) return;
 
     Hooks.on("visual-active-effects.createEffectButtons", (effect, buttons) => {
-        if (!effect?.flags?.["gambits-premades"]?.entangleRestrained) return;
+        if (effect?.flags?.["gambits-premades"]?.entangleRestrained) {
+            buttons.push({
+                label: game.i18n.localize("GAMBITSPREMADES.Dialogs.Automations2024.Spells.Entangle2024.Buttons.Escape"),
+                callback: () => escapeEntangle(effect)
+            });
+            return;
+        }
 
-        buttons.push({
-            label: game.i18n.localize("GAMBITSPREMADES.Dialogs.Automations2024.Spells.Entangle2024.Buttons.Escape"),
-            callback: () => escapeEntangle(effect)
-        });
+        // Queue T130: Sleep's stage-2 "save vs Unconscious" no longer auto-fires outside combat
+        // (or on a concentration teardown), so the Incapacitated effect carries the manual trigger.
+        // ⚠️ The sync gate is shape-based (the hook cannot await): Incapacitated status + the
+        // `turnEnd` special duration is Sleep's applied-effect signature; the callback then verifies
+        // the resolved item really is wired to the sleep automation before rolling, and stays
+        // silent otherwise — a shape twin from another spell gets a dead button, not a wrong roll.
+        if (effect?.statuses?.has?.("incapacitated")
+            && effect?.flags?.dae?.specialDuration?.includes?.("turnEnd")) {
+            buttons.push({
+                label: game.i18n.localize("GAMBITSPREMADES.Dialogs.Automations2024.Spells.Sleep2024.Buttons.StageTwoSave"),
+                callback: () => rollSleepStageTwo(effect)
+            });
+        }
+    });
+}
+
+/**
+ * Roll Sleep's stage-2 "save vs Unconscious" from the Incapacitated effect's VAE tooltip. (T130)
+ *
+ * The manual counterpart of the automated end-of-turn trigger — Vittorio's out-of-combat and
+ * GM-fiat entry point. Runs the exact same `syntheticSave` activity through the same GM-routed
+ * socket as the automated path, so the two cannot disagree about DC or ability.
+ *
+ * @param {ActiveEffect} effect The Sleep: Incapacitated effect carrying the button.
+ */
+async function rollSleepStageTwo(effect) {
+    const itemUuid = await resolveSourceItemUuid(effect);
+    const item = itemUuid ? await fromUuid(itemUuid) : null;
+    // Verify the async half of the gate: this effect must belong to the Sleep automation.
+    if (!item?.flags?.["midi-qol"]?.onUseMacroName?.includes("game.gps.sleep2024")) {
+        return void ui.notifications.warn(game.i18n.localize("GAMBITSPREMADES.Notifications.Automations2024.Spells.Sleep2024.NoOrigin"));
+    }
+
+    const tokenDocument = effect.parent?.token ?? effect.parent?.getActiveTokens?.(false, true)?.[0];
+    if (!tokenDocument) return void ui.notifications.warn(game.i18n.localize("GAMBITSPREMADES.Notifications.Automations2024.Spells.Sleep2024.NoToken"));
+
+    const gmUser = game.gps.getPrimaryGM();
+    await game.gps.socket.executeAsUser("gpsActivityUse", gmUser, {
+        itemUuid,
+        identifier: "syntheticSave",
+        targetUuid: tokenDocument.uuid
     });
 }
 
