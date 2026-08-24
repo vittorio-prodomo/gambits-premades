@@ -8,6 +8,7 @@ import * as helpers from "./utils/helpers.js";
 import { weaponAnimations } from "./utils/animationUtils.js";
 import { animation } from './animations/_index.js';
 import { registerVaeButtons } from './utils/vaeButtons.js';
+import { registerSleepTargetConfirmation } from './automations2024/spells/sleep2024.js';
 
 Hooks.once('init', async function() {
     registerSettings();
@@ -105,5 +106,6 @@ Hooks.once('ready', async function() {
 
     registerHooks();
     registerVaeButtons();
+    registerSleepTargetConfirmation();
     daeInjectFlags();
 });

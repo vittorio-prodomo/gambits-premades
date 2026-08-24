@@ -1,28 +1,43 @@
 {
-  "GAMBITSPREMADES": {
-    "Notifications": {
-      "Automations2024": {
-        "Spells": {
-          "Sleep2024": {
-            "TargetImmuneToSleepOrExhaustion": "Supera automaticamente: questa creatura non dorme, o è immune alla condizione Sfinimento."
-          },
-          "Entangle2024": {
-            "NoOrigin": "Questo effetto Intralciare non ha un oggetto di origine, quindi non è possibile determinare la CD per liberarsi.",
-            "NoToken": "Nessun token trovato per questa creatura, quindi la prova per liberarsi non può essere tirata."
-          }
-        }
-      }
-    },
-    "Dialogs": {
-      "Automations2024": {
-        "Spells": {
-          "Entangle2024": {
-            "Buttons": {
-              "Escape": "Divincolati dai rovi (Atletica)"
+    "GAMBITSPREMADES": {
+        "Notifications": {
+            "Automations2024": {
+                "Spells": {
+                    "Sleep2024": {
+                        "TargetImmuneToSleepOrExhaustion": "Supera automaticamente: questa creatura non dorme, o è immune alla condizione Sfinimento.",
+                        "NoOrigin": "Impossibile risalire all'incantesimo Sonno da questo effetto.",
+                        "NoToken": "Nessun token trovato per questa creatura."
+                    },
+                    "Entangle2024": {
+                        "NoOrigin": "Questo effetto Intralciare non ha un oggetto di origine, quindi non è possibile determinare la CD per liberarsi.",
+                        "NoToken": "Nessun token trovato per questa creatura, quindi la prova per liberarsi non può essere tirata."
+                    }
+                }
             }
-          }
+        },
+        "Dialogs": {
+            "Automations2024": {
+                "Spells": {
+                    "Entangle2024": {
+                        "Buttons": {
+                            "Escape": "Divincolati dai rovi (Atletica)"
+                        }
+                    },
+                    "Sleep2024": {
+                        "TargetConfirm": {
+                            "Title": "Sonno — scegli i bersagli",
+                            "Content": "Sonno influenza ogni creatura <b>a tua scelta</b> nella Sfera. Deseleziona le creature che non vuoi bersagliare.",
+                            "Confirm": "Conferma"
+                        },
+                        "Buttons": {
+                            "StageTwoSave": "Tira il TS contro Privo di Sensi"
+                        }
+                    }
+                }
+            }
+        },
+        "AutoSuccess": {
+            "Label": "AUTOSUCCESSO"
         }
-      }
     }
-  }
 }

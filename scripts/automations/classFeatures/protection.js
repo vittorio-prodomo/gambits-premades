@@ -1,3 +1,5 @@
+import { attackerHasDisadvantageFlags } from "../../utils/attackerDisadvantage.mjs";
+
 export async function protection({workflowData,workflowType,workflowCombat}) {
     const workflow = await MidiQOL.Workflow.getWorkflow(workflowData);
     if(!workflow) return;
@@ -7,7 +9,12 @@ export async function protection({workflowData,workflowType,workflowCombat}) {
     let dialogId = gpsUuid;
     let target = workflow.targets.first();
     let enableProtectionOnSuccess = MidiQOL.safeGetGameSetting('gambits-premades', 'enableProtectionOnSuccess');
-    if ((enableProtectionOnSuccess && workflow.attackRoll.formula.includes("kl")) || (!enableProtectionOnSuccess && workflow.tracker.hasDisadvantage)) return;
+    // ⚠️ FORK PATCH (queue T150). The pre-roll half of this gate read only the tracker, but
+    // Sap-shaped effects deliver disadvantage through the ATTACKER's own
+    // `flags.midi-qol.disadvantage.attack.*` (folded into actor flags by DAE), which the tracker
+    // does not yet reflect when the offer is raised — so a Sapped attacker still triggered the
+    // Protection prompt. The attacker-flags read closes that path.
+    if ((enableProtectionOnSuccess && workflow.attackRoll.formula.includes("kl")) || (!enableProtectionOnSuccess && (workflow.tracker.hasDisadvantage || attackerHasDisadvantageFlags(workflow.actor)))) return;
     let gmUser = game.gps.getPrimaryGM();
     const initialTimeLeft = Number(MidiQOL.safeGetGameSetting('gambits-premades', `Protection Timeout`));
 
