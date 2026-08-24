@@ -1,23 +1,29 @@
 /*
- * Queue T131 — the pure halves of Sleep's "each creature of your choice" confirmation.
+ * Queue T131 (+ 08-24 follow-up) — the pure halves of Sleep's "each creature of your choice"
+ * confirmation.
  *
- * RAW 2024 Sleep targets creatures OF THE CASTER'S CHOICE inside the sphere; the template
- * auto-targeting swept in everything. The caster-facing dialog is built from these rows and the
- * resulting kept-ids selection is applied to the workflow's target Set before any save rolls.
+ * RAW 2024 Sleep targets creatures OF THE CASTER'S CHOICE inside the sphere. midi's template
+ * auto-targeting sweeps in hostiles only (disposition filter), so the dialog lists BOTH:
+ * auto-targeted creatures (ticked) and covered-but-not-targeted ones — allies — UNTICKED, so
+ * including an ally is a conscious choice (Vittorio 2026-08-24).
  */
-export function buildSleepConfirmRows(targets) {
-    return [...targets].map(t => ({
+export function buildSleepConfirmRows(targets, extras = []) {
+    const row = (t, checked, extra) => ({
         id: t.id,
         name: t.name ?? t.document?.name,
-        img: t.document?.texture?.src
-    }));
+        img: t.document?.texture?.src,
+        checked,
+        extra
+    });
+    return [...[...targets].map(t => row(t, true, false)), ...[...extras].map(t => row(t, false, true))];
 }
 
 /*
  * Mutates `targets` (a Set of Token objects) in place — the workflow owns it and midi reads the
- * same reference downstream. Returns the removed tokens so the caller can release canvas targeting.
+ * same reference downstream. Removes auto-targets whose ids are not kept, adds kept extras.
+ * Returns {removed, added} so the caller can sync canvas targeting both ways.
  */
-export function applyConfirmSelection(targets, keptIds) {
+export function applyConfirmSelection(targets, keptIds, extras = []) {
     const kept = new Set(keptIds);
     const removed = [];
     for (const token of [...targets]) {
@@ -26,5 +32,12 @@ export function applyConfirmSelection(targets, keptIds) {
             removed.push(token);
         }
     }
-    return removed;
+    const added = [];
+    for (const token of extras) {
+        if (kept.has(token.id) && !targets.has(token)) {
+            targets.add(token);
+            added.push(token);
+        }
+    }
+    return {removed, added};
 }

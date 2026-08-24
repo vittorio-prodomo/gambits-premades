@@ -103,39 +103,62 @@ export async function sleep2024({ speaker, actor, token, character, item, args, 
 }
 
 /*
- * Queue T131 — RAW 2024 Sleep is "Each creature of your choice in a 5-foot-radius Sphere", but
- * midi's template auto-targeting sweeps in every covered creature. After targeting settles and
- * BEFORE any save rolls, the caster gets a confirmation dialog listing the covered creatures with
- * untick boxes (all ticked by default).
+ * Queue T131 (+ 08-24 follow-up) — RAW 2024 Sleep is "Each creature of your choice in a
+ * 5-foot-radius Sphere". After targeting settles and BEFORE any save rolls, the caster gets a
+ * confirmation dialog:
+ *  - auto-targeted creatures (midi sweeps hostiles from the template) listed TICKED;
+ *  - covered-but-not-auto-targeted creatures — allies, which midi's disposition filter excludes —
+ *    listed UNTICKED, so including an ally is a conscious choice (Vittorio's call);
+ *  - Confirm applies the selection; Cancel, closing the dialog, or the countdown expiring
+ *    CANCELS THE CAST: concentration is retracted (taking the template with it), the spent slot
+ *    is refunded from the usage card's own deltas, and the card is deleted — cancel = zero
+ *    footprint, the T9 house rule.
  *
  * Registered as a GLOBAL midi hook, not an item onUse pass, deliberately:
  * - `midi-qol.targetingComplete` is awaited (`callCancellableHooks` → `asyncHooksCall`) and fires
- *   in WorkflowState_PreambleComplete — after AoE targeting, before saves.
+ *   in WorkflowState_PreambleComplete — after AoE targeting, before saves — and RETURNING FALSE
+ *   aborts the workflow, which is exactly the cancel lever.
  * - No new pass name means NO packData `onUseMacroName` change, no pack rebuild, and no stale-sheet
  *   deployment gap (the §T114 trap) — any item wired to `game.gps.sleep2024` gets the dialog.
  * - The hook runs on the CLIENT DRIVING THE WORKFLOW — the caster's own — so no socket routing.
  *
  * ⚠️ The synthetic stage-2 re-save runs a workflow on the SAME item, so it would re-raise the
  * dialog every turn end without the `syntheticSave` guard.
- * ⚠️ Close or timeout = keep every target (the pre-T131 behavior), never cancel the cast.
+ * ⚠️ GM-hidden tokens are never listed as extras — a player-facing dialog must not leak them.
  */
 export function registerSleepTargetConfirmation() {
     Hooks.on("midi-qol.targetingComplete", async (workflow) => {
         const onUse = workflow?.item?.flags?.["midi-qol"]?.onUseMacroName ?? "";
         if (!onUse.includes("game.gps.sleep2024")) return;
         if (workflow.activity?.midiProperties?.identifier === "syntheticSave") return;
-        if (!workflow.targets?.size) return;
 
-        const rows = buildSleepConfirmRows(workflow.targets);
+        // Covered-but-not-auto-targeted creatures (allies and neutrals midi's disposition filter
+        // skipped). Sleep's template is a circle, whose placeable shape is safe to test directly.
+        let extras = [];
+        const templateDoc = workflow.templateUuid ? fromUuidSync(workflow.templateUuid) : null;
+        const plc = templateDoc?.object;
+        if (plc?.shape) {
+            extras = canvas.tokens.placeables.filter(t =>
+                t.actor
+                && !t.document.hidden
+                && !workflow.targets.has(t)
+                && plc.shape.contains(t.center.x - plc.x, t.center.y - plc.y));
+        }
+        if (!workflow.targets?.size && !extras.length) return;
+
+        const rows = buildSleepConfirmRows(workflow.targets, extras);
         const rowHtml = rows.map(r => `
-            <label class="gps-sleep-confirm-row" style="display:flex;align-items:center;gap:0.5rem;margin:0.15rem 0;">
-                <input type="checkbox" name="gps-sleep-keep" value="${r.id}" checked>
+            <label class="gps-sleep-confirm-row" style="display:flex;align-items:center;gap:0.5rem;margin:0.15rem 0;${r.extra ? "opacity:0.85;" : ""}">
+                <input type="checkbox" name="gps-sleep-keep" value="${r.id}" ${r.checked ? "checked" : ""}>
                 <img src="${r.img}" width="28" height="28" style="border:none;flex:0 0 28px;object-fit:cover;">
                 <span>${foundry.utils.escapeHTML(r.name ?? "")}</span>
             </label>`).join("");
+        const extrasHint = rows.some(r => r.extra)
+            ? `<p class="hint">${game.i18n.localize("GAMBITSPREMADES.Dialogs.Automations2024.Spells.Sleep2024.TargetConfirm.ExtrasHint")}</p>`
+            : "";
         const content = `
             <p>${game.i18n.localize("GAMBITSPREMADES.Dialogs.Automations2024.Spells.Sleep2024.TargetConfirm.Content")}</p>
-            <div class="gps-sleep-confirm-list">${rowHtml}</div>`;
+            <div class="gps-sleep-confirm-list">${rowHtml}</div>${extrasHint}`;
 
         const dialogId = "gps-sleep-target-confirm";
         const initialTimeLeft = 30;
@@ -152,13 +175,17 @@ export function registerSleepTargetConfirmation() {
                         const root = dialog?.element ?? button?.form ?? document;
                         return [...root.querySelectorAll('input[name="gps-sleep-keep"]:checked')].map(i => i.value);
                     }
+                }, {
+                    action: "cancel",
+                    label: game.i18n.localize("GAMBITSPREMADES.Dialogs.Automations2024.Spells.Sleep2024.TargetConfirm.Cancel"),
+                    callback: () => null
                 }],
                 render: (event, dialog) => {
                     // House chrome (T106b): shrinking title-bar countdown. Read at CALL time —
                     // `game.gps` is reassigned wholesale at ready — and null-guarded so a missing
                     // GPS build degrades to a plain dialog that simply waits.
                     // ⚠️ attachCountdownChrome owns its own expiry and closes the dialog — the
-                    // `null` result from a closed dialog is handled below as keep-all.
+                    // `null` result from a closed dialog cancels the cast below, same as the X.
                     game.gps?.attachCountdownChrome?.(dialog, { dialogId, dialogTitle: dialog?.window?.title, initialTimeLeft });
                 },
                 close: () => null,
@@ -166,11 +193,33 @@ export function registerSleepTargetConfirmation() {
             });
         } catch (err) {
             console.warn("gambits-premades | Sleep target confirmation failed open (keeping all targets)", err);
+            return; // a broken dialog must not cancel a legitimate cast
         }
 
-        if (!Array.isArray(keptIds)) return; // closed / timed out / errored → pre-T131 behavior
-        const removed = applyConfirmSelection(workflow.targets, keptIds);
-        // Release the canvas targeting of dropped creatures so the table view agrees with the card.
+        // Cancel / close / timeout: unwind the cast to zero footprint (Vittorio 2026-08-24).
+        if (!Array.isArray(keptIds)) {
+            // 1. Retract the concentration dnd5e already began inside Activity#use — this also
+            //    deletes the placed template, a dependent (§T116).
+            const concentrationEffects = workflow.actor?.concentration?.effects ?? [];
+            const concentrationEffect = [...concentrationEffects].find(e =>
+                e.flags?.dnd5e?.activity?.uuid === workflow.activity?.uuid)
+                ?? [...concentrationEffects].find(e => e.flags?.dnd5e?.item?.id === workflow.item?.id);
+            if (concentrationEffect) await workflow.actor.endConcentration(concentrationEffect);
+            // 2. Refund the consumption from the usage card's own deltas (dnd5e's Refund
+            //    mechanism), then delete the card — cancel = zero footprint (T9 house rule).
+            const card = workflow.itemCardUuid ? await fromUuid(workflow.itemCardUuid) : null;
+            if (card?.system?.deltas) await workflow.activity.refund(card.system.deltas);
+            if (card) await card.delete().catch(() => {});
+            // 3. Belt-and-braces: the template, if concentration somehow did not own it.
+            const leftoverTemplate = workflow.templateUuid ? fromUuidSync(workflow.templateUuid) : null;
+            if (leftoverTemplate) await leftoverTemplate.delete().catch(() => {});
+            ui.notifications.info(game.i18n.localize("GAMBITSPREMADES.Notifications.Automations2024.Spells.Sleep2024.CastCancelled"));
+            return false; // aborts the workflow
+        }
+
+        const {removed, added} = applyConfirmSelection(workflow.targets, keptIds, extras);
+        // Keep the canvas targeting in agreement with the card, both directions.
         for (const t of removed) t.setTarget?.(false, { releaseOthers: false, groupSelection: true });
+        for (const t of added) t.setTarget?.(true, { releaseOthers: false, groupSelection: true });
     });
 }
