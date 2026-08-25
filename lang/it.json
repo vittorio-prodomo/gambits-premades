@@ -41,6 +41,20 @@
         },
         "AutoSuccess": {
             "Label": "AUTOSUCCESSO"
+        },
+        "ChatMessages": {
+            "Automations": {
+                "ClassFeatures": {
+                    "Wizard": {
+                        "SchoolOfDivination": {
+                            "Portent": {
+                                "EffectActive": "Dadi Presagio attivi: {dice}. Quando una creatura che puoi vedere effettua un tiro di d20, puoi sostituire il dado con uno di questi (prima del tiro).",
+                                "EffectEmpty": "Nessun dado Presagio rimanente fino al prossimo riposo lungo."
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

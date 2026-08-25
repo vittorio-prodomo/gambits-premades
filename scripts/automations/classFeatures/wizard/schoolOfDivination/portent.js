@@ -1,3 +1,21 @@
+import {currentPortentDice, portentEffectPatch, isPortentEffectName} from './portentEffectSync.mjs';
+
+// ⚠️ FORK PATCH (queue T155): keep the Portent buff's title/tooltip in sync with the dice
+// actually available — "Portent (7, 15)" while dice remain, back to "Portent" when spent out.
+// Runs after every refresh and after every spend; a DDB re-import resets the effect to its
+// bare name until the next long rest, which is acceptable (the sync is self-healing).
+async function syncPortentEffect(actor, item, descriptionHtml) {
+    const effect = Array.from(actor.allApplicableEffects()).find(e => isPortentEffectName(e.name, item.name));
+    if (!effect) return;
+    const dice = currentPortentDice(descriptionHtml);
+    const i18nBase = "GAMBITSPREMADES.ChatMessages.Automations.ClassFeatures.Wizard.SchoolOfDivination.Portent";
+    const patch = portentEffectPatch(item.name, dice, {
+        activeText: game.i18n.format(`${i18nBase}.EffectActive`, { dice: dice.join(", ") }),
+        emptyText: game.i18n.localize(`${i18nBase}.EffectEmpty`),
+    });
+    await effect.update(patch);
+}
+
 export async function portent({ speaker, actor, token, character, item, args, scope, workflow, options }) {
     if(args?.[0].macroPass === "preActiveEffects") {
         let description = item.system.description.value;
@@ -41,6 +59,10 @@ export async function portent({ speaker, actor, token, character, item, args, sc
                     }
                     }]);
                     
+                    // FORK PATCH (queue T155): the spend just removed a die from the
+                    // description — re-sync the buff title/tooltip to what remains.
+                    await syncPortentEffect(actor, item, newDescription);
+
                     const chatMessage = MidiQOL.getCachedChatMessage(workflow.itemCardUuid);
                     let content = foundry.utils.duplicate(chatMessage.content);
                     let searchString = /<div class="midi-qol-attack-roll">[\s\S]*<div class="end-midi-qol-attack-roll">/g;
@@ -113,7 +135,10 @@ export async function portent({ speaker, actor, token, character, item, args, sc
             }
         }]);
 
-        let effectData = Array.from(actor.allApplicableEffects()).find(e => e.name === item.name);
+        // FORK PATCH (queue T155): the lookup must also match a previously-suffixed name
+        // ("Portent (7, 15)"), else the refresh crashes after our own rename.
+        let effectData = Array.from(actor.allApplicableEffects()).find(e => isPortentEffectName(e.name, item.name));
         await effectData.update({"disabled": false});
+        await syncPortentEffect(actor, item, newDescription);
     }
 }
