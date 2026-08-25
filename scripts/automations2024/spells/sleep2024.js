@@ -132,6 +132,44 @@ export async function sleep2024({ speaker, actor, token, character, item, args, 
  * dialog every turn end without the `syntheticSave` guard.
  * ⚠️ GM-hidden tokens are never listed as extras — a player-facing dialog must not leak them.
  */
+// T174 — immune creatures never visibly roll. The postSave reclassification (T116/T133 above)
+// repainted AFTER a real roll: die animated, number shown, then the row went AUTOSUCCESS. Now the
+// save is FORCED before it is queued — the preTargetSave-succeed mechanism T126 built for PfEG and
+// T129 made the house standard — so there is no die and no number; the postSave paint still runs
+// (actorDoesNotSleep matches the same creatures) and prints the AUTOSUCCESS row. The
+// reclassification loop stays as the belt for anything that still arrives rolled.
+export function registerSleepAutoSuccess() {
+    Hooks.on("midi-qol.preTargetSave", async (target, workflow, saveDetails) => {
+        const onUse = workflow?.item?.flags?.["midi-qol"]?.onUseMacroName ?? "";
+        if (!onUse.includes("game.gps.sleep2024")) return;
+        if (!actorDoesNotSleep(target?.actor)) return;
+        const defaultTracker = saveDetails?.modifierTracker;
+        if (!defaultTracker) return;
+        // ⚠️ T126 contract: midi queues only advantageByChoice trackers into a normal one-ability
+        // save — mutating the default tracker alone updates the tooltip while the target still
+        // rolls, and can still fail.
+        if (!saveDetails.advantageByChoice && saveDetails.rollAbilities?.length === 1) {
+            saveDetails.advantageByChoice = {
+                [saveDetails.rollAbilities[0]]: {
+                    hasAdvantage: saveDetails.advantage,
+                    hasDisadvantage: saveDetails.disadvantage,
+                    tracker: defaultTracker
+                }
+            };
+        }
+        const trackers = new Set([
+            defaultTracker,
+            ...Object.values(saveDetails.advantageByChoice ?? {}).map(choice => choice.tracker)
+        ]);
+        for (const tracker of trackers) {
+            tracker?.modifiers?.succeed(
+                "sleep2024",
+                game.i18n.localize("GAMBITSPREMADES.Notifications.Automations2024.Spells.Sleep2024.TargetImmuneToSleepOrExhaustion")
+            );
+        }
+    });
+}
+
 export function registerSleepTargetConfirmation() {
     Hooks.on("midi-qol.targetingComplete", async (workflow) => {
         const onUse = workflow?.item?.flags?.["midi-qol"]?.onUseMacroName ?? "";
