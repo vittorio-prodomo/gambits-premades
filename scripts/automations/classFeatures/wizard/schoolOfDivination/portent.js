@@ -10,7 +10,10 @@ async function syncPortentEffect(actor, item, descriptionHtml) {
     const dice = currentPortentDice(descriptionHtml);
     const i18nBase = "GAMBITSPREMADES.ChatMessages.Automations.ClassFeatures.Wizard.SchoolOfDivination.Portent";
     const patch = portentEffectPatch(item.name, dice, {
-        activeText: game.i18n.format(`${i18nBase}.EffectActive`, { dice: dice.join(", ") }),
+        // Table pass 2026-08-26: count-prefixed so "dice: 2" can't read as "2 dice".
+        activeText: dice.length === 1
+            ? game.i18n.format(`${i18nBase}.EffectActiveOne`, { dice: dice[0] })
+            : game.i18n.format(`${i18nBase}.EffectActive`, { count: dice.length, dice: dice.join(", ") }),
         emptyText: game.i18n.localize(`${i18nBase}.EffectEmpty`),
     });
     await effect.update(patch);
@@ -43,7 +46,8 @@ export async function portent({ speaker, actor, token, character, item, args, sc
 
                 buttons.push({
                 action: `${divContent.id} | ${roll}`,
-                label: `${divContent.id} | ${roll}`,
+                // Table pass 2026-08-26: the button reads just the roll value.
+                label: `${roll}`,
                 callback: async (html) => {
                     const divId = `${divContent.id}`;
                     const regex = new RegExp(`<div id="${divId}">[\\s\\S]*?<\\/div>`, 'g');

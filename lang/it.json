@@ -55,8 +55,9 @@
                     "Wizard": {
                         "SchoolOfDivination": {
                             "Portent": {
-                                "EffectActive": "Dadi Presagio attivi: {dice}. Quando una creatura che puoi vedere effettua un tiro di d20, puoi sostituire il dado con uno di questi (prima del tiro).",
-                                "EffectEmpty": "Nessun dado Presagio rimanente fino al prossimo riposo lungo."
+                                "EffectActive": "{count} dadi Presagio rimanenti: {dice}. Quando una creatura che puoi vedere effettua un tiro di d20, puoi sostituire il dado con uno di questi (prima del tiro).",
+                                "EffectEmpty": "Nessun dado Presagio rimanente fino al prossimo riposo lungo.",
+                                "EffectActiveOne": "Un dado Presagio rimanente — mostra {dice}. Quando una creatura che puoi vedere effettua un tiro di d20, puoi sostituirlo al dado (prima del tiro)."
                             }
                         }
                     }

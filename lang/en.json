@@ -153,8 +153,9 @@
                             "Portent": {
                                 "PortentApplied": "You used {portentLabel} and changed the dice result to {roll}.",
                                 "PortentRoll": "- Portent Roll {i}:",
-                                "EffectActive": "Active Portent dice: {dice}. When a creature you can see makes a d20 roll, you can replace the die with one of these (before the roll).",
-                                "EffectEmpty": "No Portent dice remaining until your next long rest."
+                                "EffectActive": "{count} Portent dice remaining: {dice}. When a creature you can see makes a d20 roll, you can replace the die with one of these (before the roll).",
+                                "EffectEmpty": "No Portent dice remaining until your next long rest.",
+                                "EffectActiveOne": "One Portent die remaining — it shows {dice}. When a creature you can see makes a d20 roll, you can replace the die with it (before the roll)."
                             }
                         },
                         "SchoolOfEnchantment": {
