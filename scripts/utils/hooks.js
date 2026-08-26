@@ -134,6 +134,7 @@ export function registerHooks() {
 
     Hooks.on("midi-qol.preCompleted", async (workflow) => {
         let workflowItemUuid = workflow.itemCardUuid;
+        if (game.gpsSettings.parryEnabled && workflow.workflowOptions?.isReaction) await executeWorkflow({ workflowItem: "parry", workflowData: workflowItemUuid, workflowType: "utility", workflowCombat: true });
         if (game.gpsSettings.mageSlayerEnabled && workflow.activity.type === "spell") await executeWorkflow({ workflowItem: "mageSlayer", workflowData: workflowItemUuid, workflowType: "spell", workflowCombat: true });
         if (game.gpsSettings.sentinelEnabled && workflow.activity.type === "attack") await executeWorkflow({ workflowItem: "sentinel", workflowData: workflowItemUuid, workflowType: "attack", workflowCombat: true });
         if (game.gpsSettings.sentinelEnabled && workflow.activity.type === "attack") await executeWorkflow({ workflowItem: "sentinel2024", workflowData: workflowItemUuid, workflowType: "attack", workflowCombat: true });

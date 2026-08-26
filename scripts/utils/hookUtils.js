@@ -207,6 +207,7 @@ export function updateSettings(settingKey = null) {
         'enableRestoreBalance': 'restoreBalanceEnabled',
         'enableLegendaryResistance': 'legendaryResistanceEnabled',
         'enableBurstOfIngenuity': 'burstOfIngenuityEnabled',
+        'enableParry': 'parryEnabled',
         'enableTemporalShunt': 'temporalShuntEnabled',
         'disableCuttingWordsMaxMiss': 'disableCuttingWordsMaxMiss',
         'enableTaleOfHubris': 'taleOfHubrisEnabled',

@@ -37,6 +37,13 @@
                         }
                     }
                 }
+            },
+            "Automations": {
+                "MonsterFeatures": {
+                    "Parry": {
+                        "Prompt": "Usare la tua reazione per {itemName} ({formula} alla CA) contro l'attacco in mischia di {attackerName}?"
+                    }
+                }
             }
         },
         "AutoSuccess": {
@@ -53,7 +60,27 @@
                             }
                         }
                     }
+                },
+                "MonsterFeatures": {
+                    "Parry": {
+                        "Deflected": "{actorName} para il colpo (+{bonus} CA, ora {newAC}) — l'attacco manca!",
+                        "NotEnough": "{actorName} tenta di parare (+{bonus} CA, ora {newAC}) ma l'attacco va comunque a segno."
+                    }
                 }
+            }
+        },
+        "SettingsMenu": {
+            "MonsterFeatures": {
+                "Parry": {
+                    "Name": "Parata",
+                    "Description": "Offre la reazione Parata quando un attacco in mischia colpirebbe una creatura che possiede un tratto Parata utilizzabile — il bonus alla CA viene letto dalla formula dell'oggetto stesso (incluso l'1d6 su misura di Sildar). Abbinato per nome (Parry/Parata), quindi sopravvive alle reimportazioni dell'avventura."
+                }
+            }
+        },
+        "Settings": {
+            "ParryTimeout": {
+                "Name": "Timeout Parata",
+                "Hint": "Quanto attende la finestra di reazione della Parata prima di rifiutare."
             }
         }
     }

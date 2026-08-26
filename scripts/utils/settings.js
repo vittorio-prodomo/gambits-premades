@@ -527,6 +527,30 @@ export function registerSettings() {
         }
     });
 
+    game.settings.register("gambits-premades", "enableParry", {
+        name: "enableParry",
+        scope: "world",
+        config: false,
+        type: Boolean,
+        default: false
+    });
+
+    game.settings.register('gambits-premades', 'Parry Timeout', {
+        name: "GAMBITSPREMADES.Settings.ParryTimeout.Name",
+        hint: "GAMBITSPREMADES.Settings.ParryTimeout.Hint",
+        scope: 'world',
+        config: false,
+        type: String,
+        default: "15",
+        onChange: value => {
+            const numericValue = Number(value);
+            if (!isNaN(numericValue)) {
+            } else {
+                game.gps.logInfo(game.i18n.localize("GAMBITSPREMADES.UI.InvalidInputNotNumberExample"));
+            }
+        }
+    });
+
     game.settings.register("gambits-premades", "enableBurstOfIngenuity", {
         name: "enableBurstOfIngenuity",
         scope: "world",
@@ -1291,6 +1315,7 @@ export class MonsterFeaturesSettingsMenu extends BaseSettingsMenu {
 
     const definitions = [
       { id: "burstOfIngenuity", name: "GAMBITSPREMADES.SettingsMenu.MonsterFeatures.BurstOfIngenuity.Name", description: "GAMBITSPREMADES.SettingsMenu.MonsterFeatures.BurstOfIngenuity.Description", boolKey: "enableBurstOfIngenuity", timeoutKey: "Burst of Ingenuity Timeout" },
+      { id: "parry", name: "GAMBITSPREMADES.SettingsMenu.MonsterFeatures.Parry.Name", description: "GAMBITSPREMADES.SettingsMenu.MonsterFeatures.Parry.Description", boolKey: "enableParry", timeoutKey: "Parry Timeout" },
       { id: "dreadCounterspell", name: "GAMBITSPREMADES.SettingsMenu.MonsterFeatures.DreadCounterspell.Name", description: "GAMBITSPREMADES.SettingsMenu.MonsterFeatures.DreadCounterspell.Description", boolKey: "enableDreadCounterspell", timeoutKey: "Dread Counterspell Timeout" }
     ];
 

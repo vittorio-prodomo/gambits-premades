@@ -190,6 +190,10 @@
                         "DreadCounterspellAutoSuccess": "The creature was dread counterspelled because you used {itemProperName} on a spell that was 4th level or lower.",
                         "DreadCounterspellFailed": "The creature was not dread counterspelled, you rolled a {skillTotal} on your {skillFlavor} ability check and needed a {spellThreshold}.{spellPenetrationChat}",
                         "DreadCounterspellSuccess": "The creature was dread counterspelled, you rolled a {skillTotal} on your {skillFlavor} ability check."
+                    },
+                    "Parry": {
+                        "Deflected": "{actorName} parries the blow (+{bonus} AC, now {newAC}) — the attack misses!",
+                        "NotEnough": "{actorName} tries to parry (+{bonus} AC, now {newAC}) but the attack still lands."
                     }
                 },
                 "Spells": {
@@ -637,6 +641,9 @@
                     },
                     "LegendaryResistance": {
                         "PromptUseLegendaryResistance": "{actorName} failed a saving throw. Would you like to use {itemName} to succeed?"
+                    },
+                    "Parry": {
+                        "Prompt": "Use your reaction to {itemName} ({formula} to AC) against {attackerName}'s melee attack?"
                     }
                 },
                 "Spells": {
@@ -1231,6 +1238,10 @@
             "TokenMovementSpeed": {
                 "Hint": "",
                 "Name": "tokenMovementSpeed"
+            },
+            "ParryTimeout": {
+                "Name": "Parry Timeout",
+                "Hint": "How long the Parry reaction dialog waits before declining."
             }
         },
         "SettingsMenu": {
@@ -1365,6 +1376,10 @@
                 "DreadCounterspell": {
                     "Name": "Dread Counterspell",
                     "Description": "Presents a dialog for Vecna's Dread Counterspell."
+                },
+                "Parry": {
+                    "Name": "Parry",
+                    "Description": "Offers the Parry reaction when a melee attack would hit a creature holding a Parry feature it can use — the AC bonus is read from the item's own roll formula (Sildar's tailored 1d6 included). Matched by item name (Parry/Parata), so it survives adventure re-imports."
                 }
             },
             "General": {

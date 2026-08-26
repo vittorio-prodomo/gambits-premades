@@ -52,6 +52,7 @@ Hooks.once('socketlib.ready', async function() {
     game.gps.socket.register("restoreBalance", automationRegistry.restoreBalance);
     game.gps.socket.register("legendaryResistance", automationRegistry.legendaryResistance);
     game.gps.socket.register("burstOfIngenuity", automationRegistry.burstOfIngenuity);
+    game.gps.socket.register("parry", automationRegistry.parry);
     game.gps.socket.register("temporalShunt", automationRegistry.temporalShunt);
     game.gps.socket.register("drafynsBaneOfExcellence", automationRegistry.drafynsBaneOfExcellence);
     game.gps.socket.register("taleOfHubris", automationRegistry.taleOfHubris);
