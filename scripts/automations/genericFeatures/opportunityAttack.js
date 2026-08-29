@@ -121,11 +121,16 @@ export async function opportunityAttackScenarios({tokenUuid, regionUuid, regionS
     if(currentCombatant?.id !== token.object.id) {
         // A Primal Companion beast has no turn of its own — it moves on its HUNTER's turn — so treat the
         // hunter's turn as the beast's for this "it's your turn" gate; otherwise the beast never provokes an
-        // opportunity attack when it moves. Detected structurally: a chris-premades summon carrying a Primal
-        // Companion Dodge item, whose controller is the current combatant.
-        let summonControlUuid = token.actor?.flags?.["chris-premades"]?.summons?.control?.actor;
-        let isPrimalCompanionBeast = !!summonControlUuid && token.actor.items.some(i => i.flags?.["chris-premades"]?.info?.identifier === "primalCompanionDodge");
-        let beastMovingOnHuntersTurn = isPrimalCompanionBeast && currentCombatant?.actor?.uuid === summonControlUuid;
+        // opportunity attack when it moves. Detected structurally (native summon, rebuilt off dnd5e's own
+        // Summon activity — no chris-premades flags survive on the beast): flags.dnd5e.summon.origin resolves
+        // (fromUuidSync) to an item whose identifier is "primal-companion"; the controller is that item's
+        // parent actor. A stale/unresolvable origin uuid resolves to null, so this reads as "not the beast",
+        // never throws.
+        let summonOriginUuid = token.actor?.flags?.dnd5e?.summon?.origin;
+        let summonOriginItem = summonOriginUuid ? fromUuidSync(summonOriginUuid) : null;
+        let isPrimalCompanionBeast = summonOriginItem?.identifier === "primal-companion";
+        let hunterActor = isPrimalCompanionBeast ? summonOriginItem?.actor : null;
+        let beastMovingOnHuntersTurn = isPrimalCompanionBeast && currentCombatant?.actor?.uuid === hunterActor?.uuid;
         if(!beastMovingOnHuntersTurn) {
             if(debugEnabled) game.gps.logInfo(`Opportunity Attack for ${effectOriginActor.name} failed due to not tokens turn in combat`);
             return; // Avoid initiating opportunity attack when it's not a token's turn
