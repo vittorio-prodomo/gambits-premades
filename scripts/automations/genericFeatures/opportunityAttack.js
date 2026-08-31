@@ -1,6 +1,8 @@
 // GPS fork (Vittorio): fallback unarmed strike for creatures with no valid weapon/spell for an OA.
 // Reuses an existing "Unarmed Strike" (PCs have one; or one this fork created earlier); otherwise
 // clones dnd5e's canonical Unarmed Strike (1 + STR bludgeoning), equipped, flagged autoUnarmedStrike.
+import { isOaRegionUsable as gpsIsOaRegionUsable } from "../../utils/oaRegionCleanup.mjs";
+
 async function gpsGetFallbackUnarmedStrike(actor) {
     if (!actor) return null;
     let existing = actor.items.find(i => i.type === "weapon" && /^unarmed strike$/i.test(i.name)
@@ -66,6 +68,18 @@ export async function opportunityAttackScenarios({tokenUuid, regionUuid, regionS
 
     const effectOriginActor = await fromUuid(region.flags["gambits-premades"].actorUuid);
     const effectOriginToken = await fromUuid(region.flags["gambits-premades"].tokenUuid);
+
+    // ⚠️ T194: an OA region can outlive the creature that owns it. For an UNLINKED token
+    // (every NPC, every summon) `actorUuid` is the token-scoped synthetic uuid, so deleting
+    // the token leaves it unresolvable — and teardown used to be keyed only on combat
+    // events, while core does NOT delete a Combatant when its Token is deleted. The orphan
+    // kept firing, and the unguarded `effectOriginActor.items` read below threw on every
+    // move through it. The `deleteToken` hook now removes these at the source; this bails
+    // for any that predate it, or that some other path leaves behind.
+    if(!gpsIsOaRegionUsable({actor: effectOriginActor, token: effectOriginToken})) {
+        if(debugEnabled) game.gps.logInfo(`Opportunity Attack skipped: region ${region.uuid} is orphaned (actor ${effectOriginActor ? "ok" : "gone"}, token ${effectOriginToken ? "ok" : "gone"})`);
+        return;
+    }
 
     if(regionScenario === "onTurnStart") {
         let behaviors = region.behaviors.filter(b => b.name === "onExit" || b.name === "onEnter");

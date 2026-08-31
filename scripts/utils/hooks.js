@@ -1,4 +1,5 @@
 import { executeWorkflow, updateRegionPosition, hideTemplateElements, updateSettings, daeAddFlags, arcaneShotValidActivities } from "./hookUtils.js";
+import { oaRegionIdsForToken as gpsOaRegionIdsForToken } from "./oaRegionCleanup.mjs";
 
 export function registerHooks() {
     Hooks.on("preUpdateToken", async (token, updateData, options, userId) => {
@@ -191,6 +192,25 @@ export function registerHooks() {
         await game.gps.disableOpportunityAttack(combat, "endCombat");
     });
     
+    // ⚠️ T194: OA-region teardown used to be keyed ONLY on combat events, but Foundry core
+    // does NOT delete a Combatant when its Token is deleted — every core caller of
+    // TokenDocument.deleteCombatants is an explicit user action. So a token removed
+    // mid-combat (a dismissed summon, a cleared corpse) left its OA region on the scene
+    // with a dangling actor uuid, and every later move through it threw. Measured in the
+    // live world before this hook existed: 14 OA regions with NO combat running, 12 orphaned.
+    Hooks.on("deleteToken", async (tokenDocument, options, userId) => {
+        if(game.user.id !== game.gps.getPrimaryGM()) return;
+        const scene = tokenDocument.parent;
+        if(!scene) return;
+        const staleIds = gpsOaRegionIdsForToken(Array.from(scene.regions), tokenDocument.uuid);
+        if(!staleIds.length) return;
+        try {
+            await scene.deleteEmbeddedDocuments("Region", staleIds);
+        } catch (error) {
+            console.warn(`gambits-premades | failed deleting OA region(s) for removed token ${tokenDocument.uuid}: ${error.message}`);
+        }
+    });
+
     Hooks.on("deleteCombatant", async (combatant, options, userId) => {
         if(game.user.id !== game.gps.getPrimaryGM()) return;
         let combat = game.combat;
