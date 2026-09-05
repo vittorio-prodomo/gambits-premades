@@ -416,6 +416,12 @@ export async function opportunityAttackScenarios({tokenUuid, regionUuid, regionS
            await chosenWeapon.setFlag("midi-qol", "oaFavoriteAttack", true);
         }
 
+        // FORK PATCH (queue T224): an OA is melee, so the one-handed-vs-thrown choice a Thrown weapon
+        // would otherwise force (midi opens the attack dialog for ANY Thrown weapon, whatever the
+        // fast-forward settings) is meaningless here. Preset the first non-thrown mode and tell midi
+        // not to ask for this use — both read by midi fork patch #22 via `midiOptions`.
+        // (`configureDialog`/`versatile` are stale option names midi no longer reads; kept for upstream diff hygiene.)
+        const meleeMode = (chosenWeapon?.system?.attackModes ?? []).find(m => !/thrown/i.test(m.value))?.value ?? 'oneHanded';
         const options = {
             showFullCard: false,
             createWorkflow: true,
@@ -425,7 +431,10 @@ export async function opportunityAttackScenarios({tokenUuid, regionUuid, regionS
             workflowOptions: {
                 autoRollDamage: 'onHit',
                 autoRollAttack: true,
-                autoFastDamage: true
+                autoFastDamage: true,
+                // midi copies workflowOptions onto the workflow; the top level does NOT reach the attack roll.
+                forceRollDialog: hasWarCaster ? 'always' : 'never',
+                attackMode: meleeMode
             }
         };
         if (rsakCheck || originDisadvantage) {
