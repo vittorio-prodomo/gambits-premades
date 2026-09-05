@@ -172,6 +172,27 @@ Hooks.on("dnd5e.preUseActivity", (activity, usageConfig, dialogConfig, messageCo
     if (messageConfig) messageConfig.create = false;
 });
 
+// FORK PATCH (queue T217 follow-up): with no item card, the synthetic d20 reaches Dice So Nice with no
+// message and bare options, so dsn-roller-labels can only say "GM". Stamp the roller's speaker and the
+// roll kind on the roll's midi-qol options channel — the same vehicle midi's own patches use — BEFORE
+// midi displays it (`dnd5e.rollFormulaV2` fires inside dnd5e's rollFormula, ahead of midi's
+// displayDSNForRoll). Pill: "Nahuel" with her chip, and "Feature Roll / Portent" above.
+Hooks.on("dnd5e.rollFormulaV2", (rolls, {subject} = {}) => {
+    try {
+        if (activityIdentifier(subject) !== "syntheticRoll" || subject?.item?.name !== "Portent") return;
+        const actor = subject.actor;
+        if (!actor) return;
+        const token = actor.token ?? actor.getActiveTokens()[0]?.document ?? null;
+        const speaker = ChatMessage.getSpeaker({ actor, token });
+        for (const roll of rolls ?? []) {
+            foundry.utils.setProperty(roll.options, "midi-qol.speaker", speaker);
+            foundry.utils.setProperty(roll.options, "midi-qol.rollContext", { type: "utility", itemName: subject.item.name });
+        }
+    } catch (err) {
+        console.error("gambits-premades | Portent die label stamp failed", err);
+    }
+});
+
 // FORK PATCH (queue T217): dice die at the end of a long rest (RAW), whatever the automation mode —
 // in `chat`/`none` nothing re-rolls until someone uses the refresh activity, and a stale die must
 // not be spendable meanwhile. `dnd5e.restCompleted` is a LOCAL callAll inside `Actor5e#_rest`, so it
