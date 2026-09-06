@@ -1,5 +1,7 @@
 import { itemUuidFromOrigin } from "./effectOrigin.mjs";
 import { releaseFromEntangle } from "../automations2024/spells/entangle2024.js";
+import { resolveSleepStageTwo } from "../automations2024/spells/sleep2024.js";
+import { isSleepIncapacitated } from "./sleepStageTwo.mjs";
 
 /**
  * Visual Active Effects buttons owned by GPS. (queue T114)
@@ -26,14 +28,12 @@ export function registerVaeButtons() {
             return;
         }
 
-        // Queue T130: Sleep's stage-2 "save vs Unconscious" no longer auto-fires outside combat
-        // (or on a concentration teardown), so the Incapacitated effect carries the manual trigger.
-        // ⚠️ The sync gate is shape-based (the hook cannot await): Incapacitated status + the
-        // `turnEnd` special duration is Sleep's applied-effect signature; the callback then verifies
-        // the resolved item really is wired to the sleep automation before rolling, and stays
-        // silent otherwise — a shape twin from another spell gets a dead button, not a wrong roll.
-        if (effect?.statuses?.has?.("incapacitated")
-            && effect?.flags?.dae?.specialDuration?.includes?.("turnEnd")) {
+        // Queue T130: Sleep's stage-2 "save vs Unconscious" never auto-fires outside combat (the
+        // per-turn repeat only runs on combat turns), so the Incapacitated effect carries the
+        // manual trigger. Since the 2.1.44 model (2026-09-06) the gate is the stable gpsUuid
+        // upstream stamps on that effect — sync, so the hook can use it; the callback still verifies
+        // the resolved item really is wired to the sleep automation before rolling.
+        if (isSleepIncapacitated(effect)) {
             buttons.push({
                 label: game.i18n.localize("GAMBITSPREMADES.Dialogs.Automations2024.Spells.Sleep2024.Buttons.StageTwoSave"),
                 callback: () => rollSleepStageTwo(effect)
@@ -62,21 +62,13 @@ async function rollSleepStageTwo(effect) {
     const tokenDocument = effect.parent?.token ?? effect.parent?.getActiveTokens?.(false, true)?.[0];
     if (!tokenDocument) return void ui.notifications.warn(game.i18n.localize("GAMBITSPREMADES.Notifications.Automations2024.Spells.Sleep2024.NoToken"));
 
-    const gmUser = game.gps.getPrimaryGM();
-    await game.gps.socket.executeAsUser("gpsActivityUse", gmUser, {
-        itemUuid,
-        identifier: "syntheticSave",
-        targetUuid: tokenDocument.uuid
-    });
+    const token = tokenDocument.object ?? canvas?.tokens?.get?.(tokenDocument.id);
+    if (!token) return void ui.notifications.warn(game.i18n.localize("GAMBITSPREMADES.Notifications.Automations2024.Spells.Sleep2024.NoToken"));
 
-    // T130 follow-up (Vittorio 2026-08-24): consume the Incapacitated effect either way, matching
-    // the in-combat semantics where the turn-end EXPIRY precedes the stage-2 save. RAW: a
-    // successful second save leaves the creature free (the Incapacitated duration was "until the
-    // end of its next turn" — there is no third save); a failed one has Unconscious applied by the
-    // syntheticSave activity, and this sleep-specific Incapacitated must not linger beside it.
-    // ⚠️ This deletion fires the DAE off macro with reason 'effect-deleted' — the T130 gate keeps
-    // it silent, so no loop.
-    await effect.delete().catch(() => {});
+    // Same routine as the automated end-of-turn trigger: GM-routed synthetic save, then the
+    // Incapacitated effect is consumed either way (T130 follow-up, Vittorio 2026-08-24: RAW gives
+    // no third save, and a failure has Unconscious applied by the syntheticSave activity).
+    await resolveSleepStageTwo(item, token);
 }
 
 /**

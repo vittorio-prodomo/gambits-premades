@@ -1,5 +1,5 @@
 import { actorDoesNotSleep } from "../../utils/doesNotSleep.mjs";
-import { shouldFireSleepStage2 } from "../../utils/sleepStage2Gate.mjs";
+import { findSleepIncapacitated, stageTwoOutcome } from "../../utils/sleepStageTwo.mjs";
 import { paintAutoSuccessRow } from "../../utils/autoSuccessRow.mjs";
 import { buildSleepConfirmRows, applyConfirmSelection } from "../../utils/sleepTargetConfirm.mjs";
 
@@ -81,31 +81,45 @@ export async function sleep2024({ speaker, actor, token, character, item, args, 
         }
     }
 
-    else if (args?.[0] === "off") {
-        // ⚠️ FORK PATCH (queue T130). DAE fires this branch on ANY removal of the Incapacitated
-        // effect — but only times-up's end-of-turn expiry is the RAW stage-2 trigger. Unconditional,
-        // this put two goblins to sleep AFTER Nigel's concentration had ended: the teardown deleted
-        // the effect, the branch fired, and the "save vs Unconscious" ran against a dead spell.
-        // The deletion's reason rides in DAE's lastArg (`expiry-reason`): 'times-up:turnEnd' is the
-        // legit path; concentration teardown / manual removal / Medkit passes arrive as
-        // 'effect-deleted' (DAE's default) and must stay silent.
-        // Outside combat the stage-2 save never auto-fires (Vittorio 2026-08-24) — the VAE button on
-        // the effect (utils/vaeButtons.js) is the manual trigger for out-of-combat play.
-        const lastArg = typeof args[args.length - 1] === "object" ? args[args.length - 1] : {};
-        // ⚠️ The applied effect's `origin` is the caster's CONCENTRATION effect, not the item
-        // ([[gps-fork-setup]] §T114) — which makes it exactly the "is the spell still live?" probe:
-        // on a turnEnd expiry it still resolves, on a concentration teardown it is already gone.
-        const concentrationAlive = !!(lastArg.origin && await fromUuid(lastArg.origin));
-        if (!shouldFireSleepStage2({
-            expiryReason: lastArg["expiry-reason"],
-            combatStarted: !!game.combat?.started,
-            concentrationAlive
-        })) return;
-
-        let gmUser = game.gps.getPrimaryGM();
+    // Stage-2 "save vs Unconscious" — upstream 2.1.44's per-turn repeat model, adopted 2026-09-06
+    // (replaces the fork's T130 `off`-branch gate; see utils/sleepStageTwo.mjs for the rationale).
+    // The Incapacitated effect carries `macroRepeat: endEveryTurn`, so times-up calls this `each`
+    // branch at the end of the SLEEPER's turn — in combat only. Nothing fires on a concentration
+    // teardown any more: the effect simply dies as a dependent, and `each` is never an `off`.
+    // Outside combat the stage-2 save never auto-fires (Vittorio 2026-08-24) — the VAE button on
+    // the effect (utils/vaeButtons.js) is the manual trigger, and it runs this same routine.
+    else if (args?.[0] === "each") {
+        // `@itemUuid` in the DAE change value lands in args[2] (verified live for the old branch).
         item = await fromUuid(args[2]);
-        await game.gps.socket.executeAsUser("gpsActivityUse", gmUser, {itemUuid: item.uuid, identifier: "syntheticSave", targetUuid: token.document.uuid});
+        if (!item || !token) return;
+        await resolveSleepStageTwo(item, token);
     }
+}
+
+/**
+ * Roll Sleep's second save for one sleeper and settle the Incapacitated effect. Shared by the
+ * automated end-of-turn trigger and the manual VAE button, so the two cannot disagree.
+ *
+ * Routed through the GM: the save is made against the CASTER's item, which the sleeper's owner
+ * need not own. A failure has Unconscious applied by the `syntheticSave` activity's own effect;
+ * either way this sleep-specific Incapacitated is consumed (fork deviation from upstream, which
+ * leaves it beside Unconscious for the rest of the minute).
+ *
+ * @param {Item} item     The Sleep item.
+ * @param {Token} token   The sleeper's token (placeable).
+ */
+export async function resolveSleepStageTwo(item, token) {
+    const gmUser = game.gps.getPrimaryGM();
+    const saveCheck = await game.gps.socket.executeAsUser("gpsActivityUse", gmUser, {
+        itemUuid: item.uuid,
+        identifier: "syntheticSave",
+        targetUuid: token.document.uuid
+    });
+    // Unconscious rides the syntheticSave activity and the Incapacitated effect goes either way,
+    // so the outcome is only logged — kept explicit as the seam for any future "awake" handling.
+    game.gps.logInfo?.(`Sleep stage-2 for ${token.name}: ${stageTwoOutcome(saveCheck)}`);
+    const incapacitated = findSleepIncapacitated(token.actor);
+    if (incapacitated) await incapacitated.delete().catch(() => {});
 }
 
 /*
