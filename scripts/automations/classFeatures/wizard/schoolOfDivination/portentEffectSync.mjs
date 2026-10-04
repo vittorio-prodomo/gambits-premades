@@ -88,3 +88,71 @@ export function activityIdentifier(activity) {
 }
 
 export const PORTENT_REFRESH_IDENTIFIER = 'portentRefresh';
+
+/*
+ * Queue T234 — the Argon button opens a three-way menu (spend · refresh · enter by hand), the
+ * long-rest refresh asks instead of rolling, and the dice can be typed in (physical dice).
+ */
+export const PORTENT_SET_IDENTIFIER = 'portentSet';
+export const PORTENT_SYNTHETIC_IDENTIFIER = 'syntheticRoll';
+
+/** The player-facing spend activity is the one that is none of the plumbing. */
+export function isSpendIdentifier(identifier) {
+    return ![PORTENT_REFRESH_IDENTIFIER, PORTENT_SET_IDENTIFIER, PORTENT_SYNTHETIC_IDENTIFIER].includes(identifier);
+}
+
+/**
+ * The dice block a refresh (rolled) or a hand entry writes at the head of the description —
+ * one `<div id="Portent Roll N">` per die, numbered from 1 with no gaps, closed by the stamped marker.
+ * @param {(number|string)[]} values
+ * @param {{header: string, label: (i: number) => string, now: number}} parts
+ */
+export function portentDiceBlock(values, {header, label, now}) {
+    let block = header;
+    values.forEach((value, index) => {
+        const i = index + 1;
+        block += `<div id="Portent Roll ${i}">${label(i)} <b><span id="portentRoll${i}">${value}</span></b></div>`;
+    });
+    return block + '<br>' + portentMarker(now);
+}
+
+/**
+ * Validate hand-typed dice. An empty field means "that die does not exist"; anything else must be
+ * a whole number from 1 to 20.
+ * @param {unknown[]} raw  one entry per field
+ * @returns {{values: number[], error: null|'range'|'empty'}}
+ */
+export function parsePortentInput(raw) {
+    const values = [];
+    for (const entry of raw ?? []) {
+        const text = String(entry ?? '').trim();
+        if (text === '') continue;
+        if (!/^\d+$/.test(text)) return {values: [], error: 'range'};
+        const value = Number(text);
+        if (value < 1 || value > 20) return {values: [], error: 'range'};
+        values.push(value);
+    }
+    if (!values.length) return {values: [], error: 'empty'};
+    return {values, error: null};
+}
+
+/**
+ * Did this click come from the Argon HUD? (`usageConfig.event` of a HUD button.) The HUD root is
+ * `<div id="core-hud" class="extended-combat-hud …">` — matched on the class, verified live.
+ */
+export const ARGON_HUD_SELECTOR = '.extended-combat-hud';
+export function isHudOrigin(event) {
+    const el = event?.currentTarget?.closest ? event.currentTarget : event?.target;
+    if (typeof el?.closest !== 'function') return false;
+    return !!el.closest(ARGON_HUD_SELECTOR);
+}
+
+/**
+ * Is this use midi's Activation Cost Automation firing a rest activity? Its call is
+ * `completeActivityUse(activity, {midiOptions: {noUseWarning: true}}, {}, {})` (midi `Hooks.ts`,
+ * the `preCreateChatMessage` handler) — no event, and that one option. If midi ever changes the
+ * call this reads false and the refresh simply rolls on its own again, as it did before T234.
+ */
+export function isRestActivation(usageConfig) {
+    return usageConfig?.midiOptions?.noUseWarning === true && !usageConfig?.event;
+}

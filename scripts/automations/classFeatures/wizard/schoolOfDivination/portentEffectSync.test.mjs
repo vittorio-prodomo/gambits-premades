@@ -97,3 +97,58 @@ test('activity identifier: midi\'s field first, then a name slug, never undefine
     assert.equal(activityIdentifier({identifier: undefined, name: 'Refresh Portent Dice'}), 'refreshportentdice');
     assert.equal(activityIdentifier(undefined), '');
 });
+
+/* Queue T234 — menu, hand entry, long-rest prompt. */
+import {portentDiceBlock, parsePortentInput, isSpendIdentifier, isHudOrigin, isRestActivation} from './portentEffectSync.mjs';
+
+test('the dice block matches what the reader parses, numbered without gaps', () => {
+    const html = portentDiceBlock([7, 15], {header: 'Your portent rolls are:<br><br>', label: (i) => `- Portent Roll ${i}:`, now: 1234});
+    assert.deepEqual(currentPortentDice(html), ['7', '15']);
+    assert.ok(html.startsWith('Your portent rolls are:<br><br><div id="Portent Roll 1">- Portent Roll 1: <b><span id="portentRoll1">7</span></b></div>'));
+    assert.ok(html.endsWith('<br><div id="endPortentRolls" data-refreshed="1234"></div>'));
+    assert.equal(isFreshRefresh(html, 2000), true);
+    assert.equal(portentFeatureText(html + FEATURE), FEATURE);
+});
+
+test('hand entry: whole numbers 1–20, an empty field is a die that does not exist', () => {
+    assert.deepEqual(parsePortentInput(['7', '15']), {values: [7, 15], error: null});
+    assert.deepEqual(parsePortentInput([' 20 ', '']), {values: [20], error: null});
+    assert.deepEqual(parsePortentInput(['', '1', '']), {values: [1], error: null});
+    assert.deepEqual(parsePortentInput([3, 12]), {values: [3, 12], error: null});
+});
+
+test('hand entry: out of range, fractions, signs and text are refused; all-empty is refused', () => {
+    for (const bad of ['0', '21', '-3', '7.5', 'abc', '1e1']) {
+        assert.equal(parsePortentInput(['5', bad]).error, 'range', bad);
+    }
+    assert.equal(parsePortentInput(['', '  ']).error, 'empty');
+    assert.equal(parsePortentInput([]).error, 'empty');
+    assert.equal(parsePortentInput(undefined).error, 'empty');
+});
+
+test('the spend activity is whatever is not plumbing', () => {
+    assert.equal(isSpendIdentifier(''), true);
+    assert.equal(isSpendIdentifier('use'), true);
+    assert.equal(isSpendIdentifier('portentRefresh'), false);
+    assert.equal(isSpendIdentifier('portentSet'), false);
+    assert.equal(isSpendIdentifier('syntheticRoll'), false);
+});
+
+test('a click inside the Argon HUD is recognised; a sheet click or no event is not', () => {
+    const inside = {closest: (sel) => (sel === '.extended-combat-hud' ? {} : null)};
+    const outside = {closest: () => null};
+    assert.equal(isHudOrigin({currentTarget: inside}), true);
+    assert.equal(isHudOrigin({target: inside}), true);
+    assert.equal(isHudOrigin({currentTarget: null, target: inside}), true, 'currentTarget is null after dispatch');
+    assert.equal(isHudOrigin({currentTarget: outside, target: outside}), false);
+    assert.equal(isHudOrigin(undefined), false);
+    assert.equal(isHudOrigin({}), false);
+});
+
+test('midi\'s rest automation is recognised by its own call shape, a click never is', () => {
+    assert.equal(isRestActivation({midiOptions: {noUseWarning: true}}), true);
+    assert.equal(isRestActivation({midiOptions: {noUseWarning: true}, event: {}}), false);
+    assert.equal(isRestActivation({midiOptions: {}}), false);
+    assert.equal(isRestActivation({}), false);
+    assert.equal(isRestActivation(undefined), false);
+});

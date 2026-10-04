@@ -9,6 +9,7 @@ import { weaponAnimations } from "./utils/animationUtils.js";
 import { animation } from './animations/_index.js';
 import { registerVaeButtons } from './utils/vaeButtons.js';
 import { registerSleepTargetConfirmation, registerSleepAutoSuccess } from './automations2024/spells/sleep2024.js';
+import { portentRestPrompt } from './automations/classFeatures/wizard/schoolOfDivination/portent.js';
 
 Hooks.once('init', async function() {
     registerSettings();
@@ -87,6 +88,8 @@ Hooks.once('socketlib.ready', async function() {
     game.gps.socket.register("gpsUpdateMidiRange", helpers.gpsUpdateMidiRange);
     game.gps.socket.register("gmSetFlag", helpers.gmSetFlag);
     game.gps.socket.register("gpsApplyTempHp", helpers.gpsApplyTempHp);
+    // FORK PATCH (queue T234): the long-rest "roll your Portent dice?" prompt is addressed to the player.
+    game.gps.socket.register("portentRestPrompt", portentRestPrompt);
 })
 
 Hooks.once('ready', async function() {

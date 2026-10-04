@@ -43,6 +43,32 @@
                     "Parry": {
                         "Prompt": "Usare la tua reazione per {itemName} ({formula} alla CA) contro l'attacco in mischia di {attackerName}?"
                     }
+                },
+                "ClassFeatures": {
+                    "Wizard": {
+                        "SchoolOfDivination": {
+                            "Portent": {
+                                "SelectPortentRoll": "Quale dado Presagio vuoi usare?",
+                                "Windowtitle": "Presagio — scelta del dado",
+                                "MenuDice": "Dadi Presagio disponibili: {dice}.",
+                                "MenuNoDice": "Nessun dado Presagio disponibile.",
+                                "MenuPrompt": "Cosa vuoi fare?",
+                                "MenuSpend": "Spendi un dado",
+                                "MenuRefresh": "Tira nuovi dadi",
+                                "MenuSet": "Inserisci a mano",
+                                "SetTitle": "Presagio — inserisci i dadi a mano",
+                                "SetPrompt": "Inserisci il numero uscito su ciascun dado Presagio che hai tirato (1–20). Lascia vuoto un campo se non hai quel dado.",
+                                "SetDie": "Dado Presagio {i}",
+                                "SetConfirm": "Conferma",
+                                "SetCancel": "Annulla",
+                                "SetInvalid": "Ogni dado Presagio deve essere un numero intero da 1 a 20.",
+                                "SetEmpty": "Inserisci almeno un dado Presagio.",
+                                "RestPrompt": "Hai terminato un Riposo Lungo. Vuoi tirare ora i tuoi dadi Presagio?",
+                                "RestYes": "Sì",
+                                "RestLater": "Li tiro più tardi"
+                            }
+                        }
+                    }
                 }
             }
         },
@@ -57,7 +83,9 @@
                             "Portent": {
                                 "EffectActive": "{count} dadi Presagio rimanenti: {dice}. Quando una creatura che puoi vedere effettua un tiro di d20, puoi sostituire il dado con uno di questi (prima del tiro).",
                                 "EffectEmpty": "Nessun dado Presagio rimanente fino al prossimo riposo lungo.",
-                                "EffectActiveOne": "Un dado Presagio rimanente — mostra {dice}. Quando una creatura che puoi vedere effettua un tiro di d20, puoi sostituirlo al dado (prima del tiro)."
+                                "EffectActiveOne": "Un dado Presagio rimanente — mostra {dice}. Quando una creatura che puoi vedere effettua un tiro di d20, puoi sostituirlo al dado (prima del tiro).",
+                                "NoDice": "Nessun dado Presagio disponibile da spendere.",
+                                "EnteredByHand": "Questi dadi sono stati inseriti a mano, non tirati qui."
                             }
                         }
                     }
