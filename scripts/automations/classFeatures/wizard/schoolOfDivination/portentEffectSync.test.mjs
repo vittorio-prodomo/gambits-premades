@@ -152,3 +152,27 @@ test('midi\'s rest automation is recognised by its own call shape, a click never
     assert.equal(isRestActivation({}), false);
     assert.equal(isRestActivation(undefined), false);
 });
+
+/* Queue T234 security review — a whisper list is never empty; the socket prompt validates both ends. */
+import {whisperRecipients, restPromptAllowed} from './portentEffectSync.mjs';
+
+test('rolled dice go to the player only; typed dice to the player and the GMs, de-duplicated', () => {
+    assert.deepEqual(whisperRecipients({playerId: 'p', gmIds: ['g1', 'g2'], selfId: 'g1'}), ['p']);
+    assert.deepEqual(whisperRecipients({playerId: 'p', gmIds: ['g1', 'g2'], selfId: 'p', byHand: true}), ['p', 'g1', 'g2']);
+    assert.deepEqual(whisperRecipients({playerId: 'g1', gmIds: ['g1', 'g2'], selfId: 'g1', byHand: true}), ['g1', 'g2']);
+});
+
+test('no resolvable player never produces an empty (= public) whisper list', () => {
+    assert.deepEqual(whisperRecipients({playerId: undefined, gmIds: ['g1'], selfId: 'me'}), ['me']);
+    assert.deepEqual(whisperRecipients({playerId: undefined, gmIds: [], selfId: 'me', byHand: true}), ['me']);
+    assert.deepEqual(whisperRecipients({playerId: undefined, gmIds: ['g1'], selfId: 'me', byHand: true}), ['g1']);
+});
+
+test('the rest prompt opens only for an owner, and only when a GM or an owner sent it', () => {
+    assert.equal(restPromptAllowed({senderIsGM: true, senderOwns: true, receiverOwns: true}), true, 'GM rests the party');
+    assert.equal(restPromptAllowed({senderIsGM: false, senderOwns: true, receiverOwns: true}), true, 'the player rests themselves');
+    assert.equal(restPromptAllowed({senderIsGM: false, senderOwns: false, receiverOwns: true}), false, 'another player aims it at a GM or at the owner');
+    assert.equal(restPromptAllowed({senderIsGM: true, senderOwns: true, receiverOwns: false}), false, 'aimed at a user who cannot see the actor');
+    assert.equal(restPromptAllowed({}), false);
+});
+

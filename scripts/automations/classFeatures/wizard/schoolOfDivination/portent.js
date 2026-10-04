@@ -1,4 +1,4 @@
-import {currentPortentDice, portentEffectPatch, isPortentEffectName, portentFeatureText, stripPortentDice, isFreshRefresh, activityIdentifier, PORTENT_REFRESH_IDENTIFIER, PORTENT_SET_IDENTIFIER, PORTENT_SYNTHETIC_IDENTIFIER, isSpendIdentifier, portentDiceBlock, parsePortentInput, isHudOrigin, isRestActivation} from './portentEffectSync.mjs';
+import {currentPortentDice, portentEffectPatch, isPortentEffectName, portentFeatureText, stripPortentDice, isFreshRefresh, activityIdentifier, PORTENT_REFRESH_IDENTIFIER, PORTENT_SET_IDENTIFIER, PORTENT_SYNTHETIC_IDENTIFIER, isSpendIdentifier, portentDiceBlock, parsePortentInput, isHudOrigin, isRestActivation, whisperRecipients, restPromptAllowed} from './portentEffectSync.mjs';
 
 const I18N_CHAT = "GAMBITSPREMADES.ChatMessages.Automations.ClassFeatures.Wizard.SchoolOfDivination.Portent";
 const I18N_DIALOG = "GAMBITSPREMADES.Dialogs.Automations.ClassFeatures.Wizard.SchoolOfDivination.Portent";
@@ -11,6 +11,10 @@ function isGpsPortent(item) {
 function gpsPortentItem(actor) {
     return actor?.items?.find(i => isGpsPortent(i));
 }
+
+// Item images, names and the dice text stored in the description are all player-editable, and
+// `i18n.format` does not escape — everything interpolated into dialog or chat markup goes through this.
+const esc = (value) => foundry.utils.escapeHTML(String(value ?? ""));
 
 function warnNoDice() {
     ui.notifications.warn(game.i18n.localize(`${I18N_CHAT}.NoDice`));
@@ -98,7 +102,7 @@ export async function portent({ speaker, actor, token, character, item, args, sc
                     const chatMessage = MidiQOL.getCachedChatMessage(workflow.itemCardUuid);
                     let content = foundry.utils.duplicate(chatMessage.content);
                     let searchString = /<div class="midi-qol-attack-roll">[\s\S]*<div class="end-midi-qol-attack-roll">/g;
-                    let replaceString = `<div class="midi-qol-attack-roll"><span style='text-wrap: wrap;'>${game.i18n.format("GAMBITSPREMADES.ChatMessages.Automations.ClassFeatures.Wizard.SchoolOfDivination.Portent.PortentApplied", { portentLabel: divContent.id, roll: roll })}</span><div class="end-midi-qol-attack-roll">`;
+                    let replaceString = `<div class="midi-qol-attack-roll"><span style='text-wrap: wrap;'>${game.i18n.format("GAMBITSPREMADES.ChatMessages.Automations.ClassFeatures.Wizard.SchoolOfDivination.Portent.PortentApplied", { portentLabel: esc(divContent.id), roll: esc(roll) })}</span><div class="end-midi-qol-attack-roll">`;
                     content = content.replace(searchString, replaceString);
                     await chatMessage.update({ content: content });
                 }
@@ -117,7 +121,7 @@ export async function portent({ speaker, actor, token, character, item, args, sc
                                 <div class="gps-dialog-flex">
                                     <p class="gps-dialog-paragraph">${game.i18n.localize("GAMBITSPREMADES.Dialogs.Automations.ClassFeatures.Wizard.SchoolOfDivination.Portent.SelectPortentRoll")}</p>
                                     <div id="image-container" class="gps-dialog-image-container">
-                                        <img src="${item.img}" class="gps-dialog-image">
+                                        <img src="${esc(item.img)}" class="gps-dialog-image">
                                     </div>
                                 </div>
                             </div>
@@ -164,16 +168,18 @@ async function writePortentDice({ actor, item, values, byHand = false }) {
     });
 
     let actorPlayer = MidiQOL.playerForActor(actor);
-    let whisper = [actorPlayer?.id];
     let content = diceResult;
-    if (byHand) {
-        whisper.push(...game.users.filter(u => u.isGM).map(u => u.id));
-        content += `<p><em>${game.i18n.localize(`${I18N_CHAT}.EnteredByHand`)}</em></p>`;
-    }
+    if (byHand) content += `<p><em>${game.i18n.localize(`${I18N_CHAT}.EnteredByHand`)}</em></p>`;
     await ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor }),
         content: content,
-        whisper: Array.from(new Set(whisper.filter(Boolean)))
+        // Never an empty list — that would be a public message (see `whisperRecipients`).
+        whisper: whisperRecipients({
+            playerId: actorPlayer?.id,
+            gmIds: game.users.filter(u => u.isGM).map(u => u.id),
+            selfId: game.user.id,
+            byHand
+        })
     });
 
     let newDescription = diceResult + portentFeatureText(item.system.description.value);
@@ -199,7 +205,7 @@ async function writePortentDice({ actor, item, values, byHand = false }) {
 export async function portentMenu({ actor, item }) {
     const dice = currentPortentDice(item.system.description.value);
     const status = dice.length
-        ? game.i18n.format(`${I18N_DIALOG}.MenuDice`, { dice: dice.join(", ") })
+        ? game.i18n.format(`${I18N_DIALOG}.MenuDice`, { dice: esc(dice.join(", ")) })
         : game.i18n.localize(`${I18N_DIALOG}.MenuNoDice`);
 
     const choice = await foundry.applications.api.DialogV2.wait({
@@ -213,7 +219,7 @@ export async function portentMenu({ actor, item }) {
                             <div class="gps-dialog-flex">
                                 <p class="gps-dialog-paragraph">${status}<br><br>${game.i18n.localize(`${I18N_DIALOG}.MenuPrompt`)}</p>
                                 <div id="image-container" class="gps-dialog-image-container">
-                                    <img src="${item.img}" class="gps-dialog-image">
+                                    <img src="${esc(item.img)}" class="gps-dialog-image">
                                 </div>
                             </div>
                         </div>
@@ -278,13 +284,22 @@ export async function setPortentDiceByHand({ actor, item }) {
 // asked. Runs on the client it is addressed to (registered on the GPS socket as `portentRestPrompt`).
 // "Later" needs nothing more: the rest-time wipe below has already removed yesterday's dice, and the
 // menu (or the sheet rows) rolls or sets them whenever the player is ready.
-export async function portentRestPrompt({ actorUuid }) {
-    const actor = await fromUuid(actorUuid);
+export async function portentRestPrompt({ actorUuid } = {}) {
+    const actor = typeof actorUuid === "string" ? await fromUuid(actorUuid) : null;
+    if (!(actor instanceof Actor)) return;
+    // Self-validating: socketlib calls this with `this.socketdata.userId` = the SENDER, and any
+    // connected user can send it at anyone for any actor. A direct local call has no `this`.
+    const sender = game.users.get(this?.socketdata?.userId) ?? game.user;
+    if (!restPromptAllowed({
+        senderIsGM: sender.isGM,
+        senderOwns: actor.testUserPermission(sender, "OWNER"),
+        receiverOwns: actor.isOwner
+    })) return console.warn(`gambits-premades | Portent rest prompt refused (sender ${sender.name})`);
     const item = gpsPortentItem(actor);
     if (!item) return;
 
     const choice = await foundry.applications.api.DialogV2.wait({
-        window: { title: `${item.name} — ${actor.name}` },
+        window: { title: `${item.name} — ${actor.name}` }, // set as text by ApplicationV2
         position: { width: 420 },
         content: `
             <div class="gps-dialog-container">
@@ -294,7 +309,7 @@ export async function portentRestPrompt({ actorUuid }) {
                             <div class="gps-dialog-flex">
                                 <p class="gps-dialog-paragraph">${game.i18n.localize(`${I18N_DIALOG}.RestPrompt`)}</p>
                                 <div id="image-container" class="gps-dialog-image-container">
-                                    <img src="${item.img}" class="gps-dialog-image">
+                                    <img src="${esc(item.img)}" class="gps-dialog-image">
                                 </div>
                             </div>
                         </div>
