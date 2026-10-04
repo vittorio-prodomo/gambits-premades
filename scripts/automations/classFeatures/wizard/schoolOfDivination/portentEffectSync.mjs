@@ -156,3 +156,25 @@ export function isHudOrigin(event) {
 export function isRestActivation(usageConfig) {
     return usageConfig?.midiOptions?.noUseWarning === true && !usageConfig?.event;
 }
+
+/**
+ * Who a dice message is whispered to. Rolled dice: the character's player. Typed dice: the player
+ * and the GMs. NEVER empty — an empty whisper list is a PUBLIC message, which would show the dice
+ * to the whole table when the actor has no resolvable player; the writing user is the fallback.
+ * @param {{playerId?: string, gmIds?: string[], selfId: string, byHand?: boolean}} who
+ */
+export function whisperRecipients({playerId, gmIds = [], selfId, byHand = false}) {
+    const ids = [playerId, ...(byHand ? gmIds : [])].filter(Boolean);
+    if (!ids.length) ids.push(selfId);
+    return Array.from(new Set(ids));
+}
+
+/**
+ * May this long-rest prompt open here? It arrives over the socket, so any connected user can send
+ * it at any user for any actor: the SENDER must be a GM or own the actor (a player can only ever
+ * prompt for their own character, whose dice they could re-roll anyway), and the RECEIVER must own
+ * it too (else the prompt would name an actor that user may not even see, and could not write).
+ */
+export function restPromptAllowed({senderIsGM, senderOwns, receiverOwns}) {
+    return !!receiverOwns && (!!senderIsGM || !!senderOwns);
+}
