@@ -155,7 +155,9 @@
                                 "PortentRoll": "- Portent Roll {i}:",
                                 "EffectActive": "{count} Portent dice remaining: {dice}. When a creature you can see makes a d20 roll, you can replace the die with one of these (before the roll).",
                                 "EffectEmpty": "No Portent dice remaining until your next long rest.",
-                                "EffectActiveOne": "One Portent die remaining — it shows {dice}. When a creature you can see makes a d20 roll, you can replace the die with it (before the roll)."
+                                "EffectActiveOne": "One Portent die remaining — it shows {dice}. When a creature you can see makes a d20 roll, you can replace the die with it (before the roll).",
+                                "NoDice": "No Portent dice available to spend.",
+                                "EnteredByHand": "These dice were entered by hand, not rolled here."
                             }
                         },
                         "SchoolOfEnchantment": {
@@ -542,7 +544,23 @@
                         "SchoolOfDivination": {
                             "Portent": {
                                 "SelectPortentRoll": "Which portent roll would you like to use?",
-                                "Windowtitle": "Portent Roll Selection"
+                                "Windowtitle": "Portent Roll Selection",
+                                "MenuDice": "Portent dice available: {dice}.",
+                                "MenuNoDice": "No Portent dice available.",
+                                "MenuPrompt": "What would you like to do?",
+                                "MenuSpend": "Spend a die",
+                                "MenuRefresh": "Roll new dice",
+                                "MenuSet": "Enter by hand",
+                                "SetTitle": "Portent — enter the dice by hand",
+                                "SetPrompt": "Enter the number showing on each Portent die you rolled (1–20). Leave a field empty if you do not have that die.",
+                                "SetDie": "Portent die {i}",
+                                "SetConfirm": "Confirm",
+                                "SetCancel": "Cancel",
+                                "SetInvalid": "Each Portent die must be a whole number from 1 to 20.",
+                                "SetEmpty": "Enter at least one Portent die.",
+                                "RestPrompt": "You finished a Long Rest. Roll your Portent dice now?",
+                                "RestYes": "Yes",
+                                "RestLater": "I'll roll them later"
                             }
                         },
                         "SchoolOfEnchantment": {
