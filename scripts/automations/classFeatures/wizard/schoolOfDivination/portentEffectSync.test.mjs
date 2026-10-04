@@ -176,3 +176,12 @@ test('the rest prompt opens only for an owner, and only when a GM or an owner se
     assert.equal(restPromptAllowed({}), false);
 });
 
+import {REST_PROMPT_SECONDS, countdownLabel} from './portentEffectSync.mjs';
+
+test('the rest prompt expires after 40 seconds and its "later" button counts down', () => {
+    assert.equal(REST_PROMPT_SECONDS, 40);
+    assert.equal(countdownLabel("I'll roll them later", 40), "I'll roll them later (40)");
+    assert.equal(countdownLabel('Li tiro più tardi', 0.2), 'Li tiro più tardi (1)');
+    assert.equal(countdownLabel('x', -3), 'x (0)');
+});
+

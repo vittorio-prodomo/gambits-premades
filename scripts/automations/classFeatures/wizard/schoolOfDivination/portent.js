@@ -1,4 +1,4 @@
-import {currentPortentDice, portentEffectPatch, isPortentEffectName, portentFeatureText, stripPortentDice, isFreshRefresh, activityIdentifier, PORTENT_REFRESH_IDENTIFIER, PORTENT_SET_IDENTIFIER, PORTENT_SYNTHETIC_IDENTIFIER, isSpendIdentifier, portentDiceBlock, parsePortentInput, isHudOrigin, isRestActivation, whisperRecipients, restPromptAllowed} from './portentEffectSync.mjs';
+import {currentPortentDice, portentEffectPatch, isPortentEffectName, portentFeatureText, stripPortentDice, isFreshRefresh, activityIdentifier, PORTENT_REFRESH_IDENTIFIER, PORTENT_SET_IDENTIFIER, PORTENT_SYNTHETIC_IDENTIFIER, isSpendIdentifier, portentDiceBlock, parsePortentInput, isHudOrigin, isRestActivation, whisperRecipients, restPromptAllowed, REST_PROMPT_SECONDS, countdownLabel} from './portentEffectSync.mjs';
 
 const I18N_CHAT = "GAMBITSPREMADES.ChatMessages.Automations.ClassFeatures.Wizard.SchoolOfDivination.Portent";
 const I18N_DIALOG = "GAMBITSPREMADES.Dialogs.Automations.ClassFeatures.Wizard.SchoolOfDivination.Portent";
@@ -298,6 +298,12 @@ export async function portentRestPrompt({ actorUuid } = {}) {
     const item = gpsPortentItem(actor);
     if (!item) return;
 
+    // Unanswered, the prompt closes itself after REST_PROMPT_SECONDS — the same as "later". The
+    // "later" button shows the seconds left.
+    const laterLabel = game.i18n.localize(`${I18N_DIALOG}.RestLater`);
+    const deadline = Date.now() + REST_PROMPT_SECONDS * 1000;
+    let ticker = null;
+
     const choice = await foundry.applications.api.DialogV2.wait({
         window: { title: `${item.name} — ${actor.name}` }, // set as text by ApplicationV2
         position: { width: 420 },
@@ -319,10 +325,21 @@ export async function portentRestPrompt({ actorUuid } = {}) {
         `,
         buttons: [
             { action: "yes", label: game.i18n.localize(`${I18N_DIALOG}.RestYes`), icon: "fa-solid fa-dice-d20", default: true },
-            { action: "later", label: game.i18n.localize(`${I18N_DIALOG}.RestLater`), icon: "fa-solid fa-clock" }
+            { action: "later", label: countdownLabel(laterLabel, REST_PROMPT_SECONDS), icon: "fa-solid fa-clock" }
         ],
+        render: (event, dialog) => {
+            if (ticker) return;
+            ticker = setInterval(() => {
+                const left = (deadline - Date.now()) / 1000;
+                if (left <= 0) { clearInterval(ticker); return dialog.close(); }
+                const span = dialog.element?.querySelector('button[data-action="later"] span');
+                if (span) span.innerText = countdownLabel(laterLabel, left);
+            }, 250);
+        },
+        close: () => { clearInterval(ticker); },
         rejectClose: false
     });
+    clearInterval(ticker);
 
     if (choice === "yes") await refreshPortentDice({ actor, item: gpsPortentItem(actor) ?? item });
 }

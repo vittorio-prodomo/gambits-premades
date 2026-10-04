@@ -178,3 +178,12 @@ export function whisperRecipients({playerId, gmIds = [], selfId, byHand = false}
 export function restPromptAllowed({senderIsGM, senderOwns, receiverOwns}) {
     return !!receiverOwns && (!!senderIsGM || !!senderOwns);
 }
+
+/** The long-rest prompt answers itself "later" after this many seconds (his call, 2026-10-04). */
+export const REST_PROMPT_SECONDS = 40;
+
+/** The "later" button counts the remaining seconds down: "I'll roll them later (40)". */
+export function countdownLabel(label, secondsLeft) {
+    return `${label} (${Math.max(0, Math.ceil(secondsLeft))})`;
+}
+
