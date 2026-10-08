@@ -185,3 +185,38 @@ test('the rest prompt expires after 40 seconds and its "later" button counts dow
     assert.equal(countdownLabel('x', -3), 'x (0)');
 });
 
+
+// T237 — the pre-roll prompt (dnd5e-declared-advantage) spends a die by VALUE, not by slot.
+import { removePortentDie, portentDiceValues } from './portentEffectSync.mjs';
+
+const T237_BLOCK = (values) => portentDiceBlock(values, { header: 'Your portent rolls are:<br><br>', label: (i) => `- Portent Roll ${i}:`, now: 1000 }) + '<p>Feature text.</p>';
+
+test('T237 removePortentDie removes exactly one die with that value and keeps the rest', () => {
+    const html = T237_BLOCK([7, 15]);
+    const out = removePortentDie(html, 15);
+    assert.equal(out.removed, true);
+    assert.deepEqual(currentPortentDice(out.html), ['7']);
+    assert.ok(out.html.includes('<p>Feature text.</p>'));
+    assert.ok(out.html.includes('endPortentRolls'));
+});
+
+test('T237 removePortentDie with two equal dice removes only the first', () => {
+    const out = removePortentDie(T237_BLOCK([9, 9, 3]), 9);
+    assert.equal(out.removed, true);
+    assert.deepEqual(currentPortentDice(out.html), ['9', '3']);
+});
+
+test('T237 removePortentDie leaves the text untouched when the value is not there', () => {
+    const html = T237_BLOCK([7, 15]);
+    const out = removePortentDie(html, 20);
+    assert.equal(out.removed, false);
+    assert.equal(out.html, html);
+    assert.equal(removePortentDie(html, 1).removed, false, '1 must not match 15');
+    assert.deepEqual(removePortentDie('', 7), { html: '', removed: false });
+});
+
+test('T237 portentDiceValues keeps only whole faces 1-20, in order', () => {
+    assert.deepEqual(portentDiceValues(T237_BLOCK([7, 15])), [7, 15]);
+    assert.deepEqual(portentDiceValues(T237_BLOCK(['20', 'N/A', 0, 21, '3'])), [20, 3]);
+    assert.deepEqual(portentDiceValues(null), []);
+});

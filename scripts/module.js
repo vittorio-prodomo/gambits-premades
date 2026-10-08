@@ -9,7 +9,7 @@ import { weaponAnimations } from "./utils/animationUtils.js";
 import { animation } from './animations/_index.js';
 import { registerVaeButtons } from './utils/vaeButtons.js';
 import { registerSleepTargetConfirmation, registerSleepAutoSuccess } from './automations2024/spells/sleep2024.js';
-import { portentRestPrompt } from './automations/classFeatures/wizard/schoolOfDivination/portent.js';
+import { portentRestPrompt, portentDice, spendPortentDie } from './automations/classFeatures/wizard/schoolOfDivination/portent.js';
 
 Hooks.once('init', async function() {
     registerSettings();
@@ -99,6 +99,9 @@ Hooks.once('ready', async function() {
         ...automationRegistry,
         ...automationRegistry2024,
         weaponAnimations,
+        // FORK PATCH (queue T237): read/burn Portent dice for the pre-roll prompt (dnd5e-declared-advantage).
+        portentDice,
+        spendPortentDie,
         disableRegionTeleport: false,
         animation,
         logInfo: helpers.logInfo

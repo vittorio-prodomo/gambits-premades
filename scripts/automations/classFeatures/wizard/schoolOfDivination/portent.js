@@ -1,4 +1,4 @@
-import {currentPortentDice, portentEffectPatch, isPortentEffectName, portentFeatureText, stripPortentDice, isFreshRefresh, activityIdentifier, PORTENT_REFRESH_IDENTIFIER, PORTENT_SET_IDENTIFIER, PORTENT_SYNTHETIC_IDENTIFIER, isSpendIdentifier, portentDiceBlock, parsePortentInput, isHudOrigin, isRestActivation, whisperRecipients, restPromptAllowed, REST_PROMPT_SECONDS, countdownLabel} from './portentEffectSync.mjs';
+import {currentPortentDice, portentDiceValues, removePortentDie, portentEffectPatch, isPortentEffectName, portentFeatureText, stripPortentDice, isFreshRefresh, activityIdentifier, PORTENT_REFRESH_IDENTIFIER, PORTENT_SET_IDENTIFIER, PORTENT_SYNTHETIC_IDENTIFIER, isSpendIdentifier, portentDiceBlock, parsePortentInput, isHudOrigin, isRestActivation, whisperRecipients, restPromptAllowed, REST_PROMPT_SECONDS, countdownLabel} from './portentEffectSync.mjs';
 
 const I18N_CHAT = "GAMBITSPREMADES.ChatMessages.Automations.ClassFeatures.Wizard.SchoolOfDivination.Portent";
 const I18N_DIALOG = "GAMBITSPREMADES.Dialogs.Automations.ClassFeatures.Wizard.SchoolOfDivination.Portent";
@@ -198,6 +198,30 @@ async function writePortentDice({ actor, item, values, byHand = false }) {
     let effectData = Array.from(actor.allApplicableEffects()).find(e => isPortentEffectName(e.name, item.name));
     await effectData?.update({"disabled": false});
     await syncPortentEffect(actor, item, newDescription);
+}
+
+// FORK PATCH (queue T237): a small API for the pre-roll prompt that lives in dnd5e-declared-advantage
+// ("replace this d20 with a Portent die?"). That module decides WHEN to ask; the dice stay here.
+// Exposed on `game.gps` at ready (module.js). Both are safe on any actor: no GPS Portent, no dice.
+export function portentDice(actor) {
+    const item = gpsPortentItem(actor);
+    if (!item) return { item: null, dice: [] };
+    return { item, dice: portentDiceValues(item.system.description.value) };
+}
+
+/**
+ * Burn one die by value: description, then the buff's name/tooltip. No chat line — the caller says
+ * what the die replaced. Returns the dice left, or null when that die was not there (already spent
+ * from the HUD menu while the prompt was open, say) — the caller must then NOT replace the roll.
+ */
+export async function spendPortentDie(actor, value) {
+    const item = gpsPortentItem(actor);
+    if (!item) return null;
+    const { html, removed } = removePortentDie(item.system.description.value, value);
+    if (!removed) return null;
+    await actor.updateEmbeddedDocuments("Item", [{ _id: item.id, system: { description: { value: html } } }]);
+    await syncPortentEffect(actor, item, html);
+    return portentDiceValues(html);
 }
 
 // FORK PATCH (queue T234): the Argon button opens this instead of going straight to "which die?" —
