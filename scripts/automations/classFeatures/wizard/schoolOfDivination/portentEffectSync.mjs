@@ -187,3 +187,37 @@ export function countdownLabel(label, secondsLeft) {
     return `${label} (${Math.max(0, Math.ceil(secondsLeft))})`;
 }
 
+
+/**
+ * Queue T237 — the dice as whole faces (1–20), in the order they are stored. Anything else
+ * (a hand-edited description, "N/A") is not a die a d20 can be replaced with.
+ * @param {string|null|undefined} descriptionHtml
+ * @returns {number[]}
+ */
+export function portentDiceValues(descriptionHtml) {
+    return currentPortentDice(descriptionHtml)
+        .map(v => Number(String(v).trim()))
+        .filter(n => Number.isInteger(n) && n >= 1 && n <= 20);
+}
+
+/**
+ * Queue T237 — spend a die by VALUE: drop the first `<div id="Portent Roll N">` whose stored value
+ * equals `value`. The pre-roll prompt knows which face the player chose, not which slot holds it;
+ * with two equal dice it does not matter which one goes.
+ * @param {string|null|undefined} descriptionHtml
+ * @param {number|string} value
+ * @returns {{html: string, removed: boolean}}
+ */
+export function removePortentDie(descriptionHtml, value) {
+    const html = descriptionHtml ?? '';
+    const wanted = String(value).trim();
+    const divRe = /<div id="Portent Roll \d+">[\s\S]*?<\/div>/g;
+    let m;
+    while ((m = divRe.exec(html)) !== null) {
+        const [stored] = currentPortentDice(m[0]);
+        if (stored !== undefined && String(stored).trim() === wanted) {
+            return { html: html.slice(0, m.index) + html.slice(m.index + m[0].length), removed: true };
+        }
+    }
+    return { html, removed: false };
+}
