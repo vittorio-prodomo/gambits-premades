@@ -765,6 +765,12 @@
                             "SelectCommand": "What would you like to command?"
                         }
                     }
+                },
+                "GenericActions": {
+                    "ReactionSave": {
+                        "Accept": "Dodge (use reaction)",
+                        "Decline": "Don't dodge"
+                    }
                 }
             },
             "Automations2024": {

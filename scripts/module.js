@@ -10,6 +10,7 @@ import { animation } from './animations/_index.js';
 import { registerVaeButtons } from './utils/vaeButtons.js';
 import { registerSleepTargetConfirmation, registerSleepAutoSuccess } from './automations2024/spells/sleep2024.js';
 import { portentRestPrompt, portentDice, spendPortentDie } from './automations/classFeatures/wizard/schoolOfDivination/portent.js';
+import { reactionSavePrompt, offerReactionSave } from './automations/genericActions/reactionSave.js';
 
 Hooks.once('init', async function() {
     registerSettings();
@@ -90,6 +91,7 @@ Hooks.once('socketlib.ready', async function() {
     game.gps.socket.register("gpsApplyTempHp", helpers.gpsApplyTempHp);
     // FORK PATCH (queue T234): the long-rest "roll your Portent dice?" prompt is addressed to the player.
     game.gps.socket.register("portentRestPrompt", portentRestPrompt);
+    game.gps.socket.register("reactionSavePrompt", reactionSavePrompt);
 })
 
 Hooks.once('ready', async function() {
@@ -102,6 +104,8 @@ Hooks.once('ready', async function() {
         // FORK PATCH (queue T237): read/burn Portent dice for the pre-roll prompt (dnd5e-declared-advantage).
         portentDice,
         spendPortentDie,
+        // FORK PATCH (queue T249): a reaction-funded save, offered to the target's owner.
+        offerReactionSave,
         disableRegionTeleport: false,
         animation,
         logInfo: helpers.logInfo

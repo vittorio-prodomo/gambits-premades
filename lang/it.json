@@ -69,6 +69,12 @@
                             }
                         }
                     }
+                },
+                "GenericActions": {
+                    "ReactionSave": {
+                        "Accept": "Schiva (usa la reazione)",
+                        "Decline": "Non schivare"
+                    }
                 }
             }
         },
