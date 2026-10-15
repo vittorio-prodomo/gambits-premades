@@ -1,4 +1,4 @@
-import { canReact, promptRecipient } from './reactionSaveRules.mjs';
+import { askInOrder, canReact, promptRecipient } from './reactionSaveRules.mjs';
 const I18N = 'GAMBITSPREMADES.Dialogs.Automations.GenericActions.ReactionSave';
 const DEFAULT_SECONDS = 30;
 const esc = s => foundry.utils.escapeHTML(String(s ?? ''));
@@ -47,9 +47,15 @@ export async function offerReactionSave({ targetTokenUuid, ability = 'dex', dc, 
     if (!actor) return { offered: false, accepted: false, total: null };
     if (!canReact({ reactionUsed: !!MidiQOL.hasUsedReaction(actor), statuses: [...actor.statuses] })) return { offered: false, accepted: false, total: null };
     const player = MidiQOL.playerForActor(actor);
-    const recipient = promptRecipient({ playerId: player?.id ?? null, playerActive: !!player?.active, gmId: game.users.activeGM?.id ?? null });
-    if (!recipient) return { offered: false, accepted: false, total: null };
+    const gmId = game.users.activeGM?.id ?? null;
+    const first = promptRecipient({ playerId: player?.id ?? null, playerActive: !!player?.active, gmId });
+    if (!first) return { offered: false, accepted: false, total: null };
     const data = { targetTokenUuid, ability, dc, title, text, seconds };
-    const result = recipient === game.user.id ? await reactionSavePrompt(data) : await game.gps.socket.executeAsUser('reactionSavePrompt', recipient, data);
+    // The player first, then the active GM: a recipient that cannot answer (disconnected mid-prompt, or a
+    // stale page without the handler) is skipped instead of killing the caller's action (review #4).
+    const result = await askInOrder([first, gmId], id => id === game.user.id
+        ? reactionSavePrompt(data)
+        : game.gps.socket.executeAsUser('reactionSavePrompt', id, data));
+    if (result === null) return { offered: false, accepted: false, total: null };
     return { offered: true, accepted: !!result?.accepted, total: result?.total ?? null };
 }
