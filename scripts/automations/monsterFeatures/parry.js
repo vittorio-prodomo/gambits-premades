@@ -9,7 +9,8 @@
 //
 // Deliberately NAME-matched ("Parry"/"Parata" — Babele can bake the Italian name in as data),
 // no flags required: an adventure-compendium re-import rebuilds the item bare and the
-// automation stays attached with zero per-actor edits.
+// automation stays attached with zero per-actor edits. A homebrew reaction with its own name
+// opts in through its dnd5e identifier `parry` (Rudgar Venn's "Guardia alta", flat +2).
 //
 // ⚠️ The AC effect must NOT carry DAE's `1Reaction` specialDuration — the reaction being
 // marked used expires it BEFORE midi's AC recompute runs (cost a live cycle to find). It
@@ -19,7 +20,8 @@ export async function parry({ workflowData }) {
     if (!workflow) return;
     if (!workflow.workflowOptions?.isReaction) return;
     const itemNames = ['parry', 'parata'];
-    if (!itemNames.includes(workflow.item?.name?.toLowerCase() ?? '')) return;
+    const named = itemNames.includes(workflow.item?.name?.toLowerCase() ?? '');
+    if (!named && workflow.item?.system?.identifier !== 'parry') return;
     if (workflow.item.type !== 'feat') return;
     const actor = workflow.actor;
 
@@ -43,12 +45,16 @@ export async function parry({ workflowData }) {
         bonus = rollData.total;
     }
 
+    // dnd5e's flat AC ignores ac.bonus entirely (homebrew statblocks are often flat) — raise the flat value there.
+    const change = actor.system.attributes?.ac?.calc === 'flat'
+        ? { key: 'system.attributes.ac.flat', mode: 2, value: String(bonus), priority: 20 }
+        : { key: 'system.attributes.ac.bonus', mode: 2, value: '+ ' + bonus, priority: 20 };
     const [effect] = await actor.createEmbeddedDocuments('ActiveEffect', [{
         name: workflow.item.name,
         img: workflow.item.img,
         origin: workflow.item.uuid,
         duration: { seconds: 1 },
-        changes: [{ key: 'system.attributes.ac.bonus', mode: 2, value: '+ ' + bonus, priority: 20 }],
+        changes: [change],
     }]);
 
     // Remove the effect once the triggering attack finishes (its recompute has consumed it).
