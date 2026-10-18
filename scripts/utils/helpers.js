@@ -405,9 +405,13 @@ export function findValidTokens({initiatingToken, targetedToken, itemName, itemT
                 const id   = i.identifier?.toLowerCase() ?? "";
                 const name = i.name?.toLowerCase() ?? "";
                 const act  = i.system?.actionType?.toLowerCase() ?? "";
+                // dnd5e 5.x moved actionType onto activities — an equipped weapon counts through them
+                // (else only a shield-named item ever qualified for Interception/Protection).
+                const acts = (i.type === "weapon" && i.system?.equipped)
+                    ? Array.from(i.system?.activities ?? []).map(a => a.actionType?.toLowerCase() ?? "") : [];
 
                 return itemNames.some(n =>
-                    id.includes(n) || name.includes(n) || act.includes(n)
+                    id.includes(n) || name.includes(n) || act.includes(n) || acts.includes(n)
                 );
             });
 
