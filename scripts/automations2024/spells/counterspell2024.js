@@ -1,3 +1,4 @@
+import { spellSlotRefund } from "../../utils/counterspellRefund.mjs";
 export async function counterspell2024({ workflowData,workflowType,workflowCombat }) {
     const workflow = await MidiQOL.Workflow.getWorkflow(`${workflowData}`);
     if(!workflow) return;
@@ -338,7 +339,19 @@ function getSubtleSpell({validToken}) {
 }
 
 async function refundSpellSlot({itemCardUuid, selectedToken}) {
-    const useFlag = MidiQOL.getCachedChatMessage(itemCardUuid)?.getFlag("dnd5e", "use") ?? {};
+    // ⚠️ FORK PATCH: dnd5e 5.x keeps what the countered spell spent in the card's system.deltas — refund the
+    // slot from there and take it off the card, so the card's own Refund button cannot give it back twice.
+    const message = MidiQOL.getCachedChatMessage(itemCardUuid);
+    const deltas = message?.system?.deltas;
+    if (deltas?.actor?.length) {
+        const {updates, remaining} = spellSlotRefund(deltas, keyPath => foundry.utils.getProperty(selectedToken.actor, keyPath));
+        if (!foundry.utils.isEmpty(updates)) {
+            await selectedToken.actor.update(updates);
+            await message.update({"system.deltas.actor": remaining});
+        }
+        return;
+    }
+    const useFlag = message?.getFlag("dnd5e", "use") ?? {};
     const consumed = useFlag.consumed;
 
     if (consumed && Array.isArray(consumed.actor)) {
