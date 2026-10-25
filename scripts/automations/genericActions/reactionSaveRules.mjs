@@ -1,7 +1,17 @@
 const NO_REACTIONS = ['incapacitated', 'unconscious', 'paralyzed', 'stunned', 'petrified'];
-export function canReact({reactionUsed, statuses}) {
-    if (reactionUsed) return false;
-    return !(statuses ?? []).some(s => NO_REACTIONS.includes(s));
+const DEFAULT_SECONDS = 30;
+/** Why a creature cannot take the reaction: 'used' (already spent), 'cannot' (a condition forbids it), or null. */
+export function reactionBlock({reactionUsed, statuses}) {
+    if (reactionUsed) return 'used';
+    return (statuses ?? []).some(s => NO_REACTIONS.includes(s)) ? 'cannot' : null;
+}
+export function canReact(state) {
+    return reactionBlock(state) === null;
+}
+/** The prompt's countdown: a positive number of seconds, else the default (a NaN deadline never closes). */
+export function promptSeconds(seconds) {
+    const value = Number(seconds);
+    return Number.isFinite(value) && value > 0 ? value : DEFAULT_SECONDS;
 }
 export function promptRecipient({playerId, playerActive, gmId}) {
     if (playerId && playerActive) return playerId;
