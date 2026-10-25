@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { askInOrder, canReact, promptRecipient } from './reactionSaveRules.mjs';
+import { askInOrder, canReact, promptRecipient, promptSeconds, reactionBlock } from './reactionSaveRules.mjs';
 
 test('no reaction left, or a condition that forbids reactions, means no prompt', () => {
     assert.equal(canReact({reactionUsed: false, statuses: []}), true);
@@ -30,4 +30,18 @@ test('askInOrder gives up with null when every recipient fails, and skips duplic
     let ask = async id => { asked.push(id); throw new Error('no handler'); };
     assert.equal(await askInOrder(['g1', null, 'g1'], ask), null);
     assert.deepEqual(asked, ['g1']);
+});
+
+// T249 minors (2026-10-25): the caller words its card by WHY nothing was offered.
+test('reactionBlock tells a spent reaction from a condition that forbids one', () => {
+    assert.equal(reactionBlock({reactionUsed: false, statuses: ['prone']}), null);
+    assert.equal(reactionBlock({reactionUsed: true, statuses: []}), 'used');
+    assert.equal(reactionBlock({reactionUsed: false, statuses: ['stunned']}), 'cannot');
+    assert.equal(reactionBlock({reactionUsed: true, statuses: ['stunned']}), 'used');
+});
+
+test('promptSeconds: a positive number, else the 30 s default', () => {
+    assert.equal(promptSeconds(12), 12);
+    assert.equal(promptSeconds('20'), 20);
+    for (const bad of [undefined, null, 0, -5, NaN, 'soon', Infinity]) assert.equal(promptSeconds(bad), 30, String(bad));
 });
